@@ -1,4 +1,4 @@
-theory Union_Find
+theory Union_Find2
   imports
     Refine_Imperative_HOL.IICF
 begin

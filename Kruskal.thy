@@ -1,7 +1,7 @@
 theory Kruskal
   imports
     "./Graph_Definition"
-    "./Union_Find2"
+    "./SeprefUF"
     Refine_Imperative_HOL.IICF
 begin
 
@@ -14,54 +14,49 @@ section \<open>Kruskal 1\<close>
 definition empty_tree :: "('v, 'w) graph"
   where "empty_tree \<equiv> \<lparr> nodes = V, edges = {} \<rparr>"
 
-definition previous_edges_connected :: "'v union_find \<Rightarrow> ('v \<times> 'w \<times> 'v) set \<Rightarrow> bool"
+definition previous_edges_connected :: "'v per \<Rightarrow> ('v \<times> 'w \<times> 'v) set \<Rightarrow> bool"
   where "previous_edges_connected l E' \<equiv> (\<forall>(a, w, b)\<in>E - E'.
-    same_component l a b)"
+    per_compare l a b)"
 
-definition valid_union_find_graph :: "'v union_find \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool"
-  where "valid_union_find_graph uf H \<equiv> (\<forall>a\<in>dom uf. \<forall>b\<in>dom uf.
-      (\<exists>p. valid_graph.is_path_undir H a p b) \<longleftrightarrow> same_component uf a b)"
+definition valid_union_find_graph :: "'v per \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool"
+  where "valid_union_find_graph uf H \<equiv> (\<forall>a\<in>Domain uf. \<forall>b\<in>Domain uf.
+      (\<exists>p. valid_graph.is_path_undir H a p b) \<longleftrightarrow> per_compare uf a b)"
 
 definition exists_min_spanning_tree :: "('v, 'w) graph \<Rightarrow> bool"
   where "exists_min_spanning_tree H \<equiv> (\<exists>T. subgraph H T \<and> is_minimum_spanning_tree T)"
 
-definition loop_invar_kruskal :: "('v \<times> 'w \<times> 'v) set \<Rightarrow> 'v union_find \<times> ('v, 'w) graph \<Rightarrow> bool"
+definition loop_invar_kruskal :: "('v \<times> 'w \<times> 'v) set \<Rightarrow> 'v per \<times> ('v, 'w) graph \<Rightarrow> bool"
   where "loop_invar_kruskal E' args \<equiv> case args of (uf, H) \<Rightarrow>
-    valid_union_find uf \<and>
+    part_equiv uf \<and>
     forest H \<and>
     subgraph H G \<and>
     edges H \<subseteq> E - E' \<and>
     previous_edges_connected uf E' \<and>
     valid_union_find_graph uf H \<and>
-    dom uf = V \<and>
+    Domain uf = V \<and>
     exists_min_spanning_tree H"
 
-definition loop_invar_init :: "'v set \<Rightarrow> 'v union_find \<Rightarrow> bool"
+(*definition loop_invar_init :: "'v set \<Rightarrow> 'v per \<Rightarrow> bool"
   where "loop_invar_init V' uf \<equiv>
-    valid_union_find uf \<and>
-    V' \<inter> dom uf = {} \<and>
-    V' \<union> dom uf = V \<and>
-    (\<forall>v \<in> dom uf. in_component uf v v)"
-
+    part_equiv uf \<and>
+    V' \<inter> Domain uf = {} \<and>
+    V' \<union> Domain uf = V"
+*)
 
 definition kruskal1 :: "('v, 'w) graph nres"
   where "kruskal1 \<equiv> do {
-    initial_union_find \<leftarrow> FOREACHi loop_invar_init V
-      (\<lambda>v uf. do {
-        add_node_spec uf v
-      }) empty_union_find;
-    (union_find, spanning_tree) \<leftarrow> FOREACHoi edges_less_eq loop_invar_kruskal E
+    let initial_union_find = per_init V;
+    
+    (per, spanning_tree) \<leftarrow> FOREACHoi edges_less_eq loop_invar_kruskal E
       (\<lambda>(a, w, b) (uf, H). do {
-        (uf', root_a) \<leftarrow> find_spec uf a;
-        (uf'', root_b) \<leftarrow> find_spec uf' b;
-        ASSERT (preserve_component uf uf'' \<and> in_component uf'' a root_a \<and> in_component uf'' b root_b);
-        if root_a \<noteq> root_b
+        if per_compare uf a b
         then do {
-          uf''' \<leftarrow> union_spec uf'' a b;
+          ASSERT (a\<in>Domain uf \<and> b\<in>Domain uf);
+          let uf = per_union uf a b;
           ASSERT ((a, w, b) \<in> E - edges H);
-          RETURN (uf''', add_edge a w b H)
+          RETURN (uf, add_edge a w b H)
         } else
-          RETURN (uf'', H)
+          RETURN (uf, H)
       }) (initial_union_find, empty_tree);
     RETURN spanning_tree
   }"
@@ -74,9 +69,6 @@ lemma empty_tree_weighted: "weighted_graph empty_tree"
   using empty_tree_valid
   unfolding weighted_graph_def empty_tree_def
   by simp
-
-lemma loop_invar_init_empty: "loop_invar_init V empty_union_find"
-  unfolding loop_invar_init_def by simp
 
 lemma empty_exists_min_spanning_tree: "exists_min_spanning_tree empty_tree"
 proof -
@@ -92,11 +84,11 @@ proof -
 qed
 
 lemma loop_invar_kruskal_empty:
-  assumes "loop_invar_init {} uf"
+  defines "uf\<equiv>per_init V"
   shows "loop_invar_kruskal E (uf, empty_tree)"
 proof -
-  have "(\<exists>p. valid_graph.is_path_undir empty_tree a p b) \<longleftrightarrow> same_component uf a b"
-    if ab: "a\<in>dom uf \<and> b\<in>dom uf" for a b
+  have "(\<exists>p. valid_graph.is_path_undir empty_tree a p b) \<longleftrightarrow> per_compare uf a b"
+    if ab: "a\<in>Domain uf \<and> b\<in>Domain uf" for a b
   proof
     assume "\<exists>p. valid_graph.is_path_undir empty_tree a p b"
     then obtain p where p: "valid_graph.is_path_undir empty_tree a p b"
@@ -104,47 +96,32 @@ proof -
     with valid_graph.is_path_undir.simps[OF empty_tree_valid] have "a = b"
       unfolding empty_tree_def
       by (induction rule:valid_graph.is_path_undir.induct[OF empty_tree_valid]) auto
-    with ab assms same_component_refl[of uf] show "same_component uf a b"
-      unfolding loop_invar_init_def
-      by blast
+    with ab show "per_compare uf a b"
+      unfolding uf_def
+      by (auto intro: part_equiv_refl)
+      
   next
-    assume "same_component uf a b"
-    then obtain c where c: "in_component uf a c \<and> in_component uf b c"
-      unfolding same_component_def by auto
-    from c ab assms in_component_unique[of uf] have "a = c \<and> b = c"
-      unfolding loop_invar_init_def
-      by fast
-    also from valid_graph.is_path_undir.simps(1)[OF empty_tree_valid] ab assms
+    assume "per_compare uf a b"
+    hence [simp]: "a=b" by (auto simp: uf_def)
+    
+    from valid_graph.is_path_undir.simps(1)[OF empty_tree_valid] ab assms
       have "valid_graph.is_path_undir empty_tree a [] a"
-      unfolding empty_tree_def loop_invar_init_def
-      by auto
-    ultimately show "\<exists>p. valid_graph.is_path_undir empty_tree a p b"
-      by auto
+      unfolding empty_tree_def
+      by auto    
+    then show "\<exists>p. valid_graph.is_path_undir empty_tree a p b"
+      by auto 
+    
   qed
-  with assms empty_exists_min_spanning_tree show ?thesis
-  unfolding loop_invar_kruskal_def empty_tree_def forest_def
+  with empty_exists_min_spanning_tree show ?thesis
+  unfolding uf_def loop_invar_kruskal_def empty_tree_def forest_def
     forest_axioms_def valid_graph_def subgraph_def previous_edges_connected_def
-    valid_union_find_graph_def loop_invar_init_def
+    valid_union_find_graph_def 
   by auto
 qed
 
-lemma loop_invar_init_valid_uf[simp]:
-  assumes "loop_invar_init V' uf"
-  shows "valid_union_find uf"
-  using assms
-  unfolding loop_invar_init_def by simp
-
-lemma loop_invar_init_not_exist:
-  assumes "loop_invar_init V' uf"
-  assumes "v \<in> V'"
-  shows "v \<notin> dom uf"
-  using assms
-  unfolding loop_invar_init_def by auto
-
-
 lemma loop_invar_kruskal_valid_uf[simp]:
   assumes "loop_invar_kruskal E' (uf, H)"
-  shows "valid_union_find uf"
+  shows "part_equiv uf"
   using assms
   unfolding loop_invar_kruskal_def by simp
 
@@ -168,15 +145,16 @@ lemma loop_invar_kruskal_edge_not_in_graph:
   using assms
   unfolding loop_invar_kruskal_def by auto
 
+(*
 lemma preserve_previous_edges_connected:
   assumes "previous_edges_connected uf E'"
   assumes "preserve_component uf uf'"
   assumes "dom uf = V"
   shows "previous_edges_connected uf' E'"
 proof -
-  have "same_component uf' a b" if e: "(a, w, b)\<in>E - E'" for a w b
+  have "per_compare uf' a b" if e: "(a, w, b)\<in>E - E'" for a w b
   proof -
-    from assms(1) e have "same_component uf a b"
+    from assms(1) e have "per_compare uf a b"
       unfolding previous_edges_connected_def by blast
     also from assms(3) e E_valid have "a \<in> dom uf \<and> b \<in> dom uf"
       by blast
@@ -188,68 +166,57 @@ proof -
   then show ?thesis
     unfolding previous_edges_connected_def by auto
 qed
+*)
 
 lemma preserve_previous_edges_connected_no_add:
   assumes "previous_edges_connected uf E'"
-  assumes "preserve_component uf uf'"
-  assumes "dom uf = V"
-  assumes "same_component uf' a b"
-  shows "previous_edges_connected uf' (E'-{(a, w, b)})"
+  assumes "Domain uf = V"
+  assumes "per_compare uf a b"
+  shows "previous_edges_connected uf (E'-{(a, w, b)})"
 proof -
-  have "same_component uf' a b" if e: "(a, w, b)\<in>E - E'" for a w b
+  have "per_compare uf a b" if e: "(a, w, b)\<in>E - E'" for a w b
   proof -
-    from assms(1) e have "same_component uf a b"
+    from assms(1) e have "per_compare uf a b"
       unfolding previous_edges_connected_def by blast
-    also from assms(3) e E_valid have "a \<in> dom uf \<and> b \<in> dom uf"
+    also from assms(2) e E_valid have "a \<in> Domain uf \<and> b \<in> Domain uf"
       by blast
     ultimately show ?thesis
-      using assms(2)
-      unfolding preserve_component_def same_component_def
       by blast
   qed
-  with assms(4) show ?thesis
+  with assms(3) show ?thesis
     unfolding previous_edges_connected_def by auto
 qed
 
 lemma preserve_previous_edges_connected_add:
   assumes "previous_edges_connected uf E'"
-  assumes "preserve_component_union uf uf' a b"
-  assumes "dom uf = V"
-  assumes "same_component uf' a b"
+  assumes "uf' = per_union uf a b"
+  assumes "Domain uf = V"
+  assumes "per_compare uf' a b"
   shows "previous_edges_connected uf' (E'-{(a, w, b)})"
-  using assms preserve_component_union_impl[OF assms(2)]
-  unfolding previous_edges_connected_def preserve_component_union_def
-  by blast
-
-lemma preserve_valid_union_find_graph:
-  assumes "valid_union_find_graph uf H"
-  assumes "preserve_component uf uf'"
-  assumes "dom uf = dom uf'"
-  shows "valid_union_find_graph uf' H"
   using assms
-  unfolding valid_union_find_graph_def preserve_component_def same_component_def
-  by auto
+  unfolding previous_edges_connected_def
+  using per_union_impl[of _ _ uf a b]
+  by fastforce
 
 lemma preserve_valid_union_find_graph_add:
   assumes "valid_union_find_graph uf H"
-  assumes "preserve_component_union uf uf' a b"
+  assumes UF'_def: "uf' = per_union uf a b"
   assumes "valid_graph H"
-  assumes "same_component uf' a b"
-  assumes "dom uf = dom uf'"
-  assumes "a \<in> dom uf"
-  assumes "b \<in> dom uf"
-  assumes "dom uf = V"
+  assumes "per_compare uf' a b"
+  assumes "a \<in> Domain uf"
+  assumes "b \<in> Domain uf"
+  assumes "Domain uf = V"
   assumes "subgraph H G"
-  assumes "valid_union_find uf'"
+  assumes PER: "part_equiv uf"
   shows "valid_union_find_graph uf' (add_edge a w b H)"
 proof -
-  have "(\<exists>p. valid_graph.is_path_undir (add_edge a w b H) x p y) \<longleftrightarrow> same_component uf' x y"
-    if xy: "x\<in>dom uf' \<and> y\<in>dom uf'" for x y
+  have "(\<exists>p. valid_graph.is_path_undir (add_edge a w b H) x p y) \<longleftrightarrow> per_compare uf' x y"
+    if xy: "x\<in>Domain uf' \<and> y\<in>Domain uf'" for x y
   proof
     assume "\<exists>p. valid_graph.is_path_undir (add_edge a w b H) x p y"
     then obtain p where p: "valid_graph.is_path_undir (add_edge a w b H) x p y"
       by blast
-    show "same_component uf' x y"
+    show "per_compare uf' x y"
     proof (cases "(a, w, b) \<in> set p \<or> (b, w, a) \<in> set p")
       case True
       from valid_graph.is_path_undir_split_distinct[OF add_edge_valid[OF assms(3)] p True]
@@ -260,47 +227,58 @@ proof -
         "(a, w, b) \<notin> set p' \<and> (b, w, a) \<notin> set p' \<and>
         (a, w, b) \<notin> set p'' \<and> (b, w, a) \<notin> set p''"
         by auto
-      with assms(6,7,8,9) valid_graph.add_edge_was_path[OF assms(3)]
+      with assms(5-8) valid_graph.add_edge_was_path[OF assms(3)]
       have "valid_graph.is_path_undir H x p' u \<and> valid_graph.is_path_undir H u' p'' y"
         unfolding subgraph_def by auto
-      with assms(1,5,6,7) xy u have comps: "same_component uf x u \<and> same_component uf u' y"
+      with assms(1,2,5,6) xy u have comps: "per_compare uf x u \<and> per_compare uf u' y"
         unfolding valid_union_find_graph_def
         by auto
-      from u assms(4,5,6,7) same_component_refl[OF assms(10), of a]
-        same_component_refl[OF assms(10), of b] same_component_sym[OF assms(4)]
-      have "same_component uf' u u'"
+        
+        
+      from \<open>a\<in>Domain uf\<close> \<open>b\<in>Domain uf\<close> have [simp]: "a\<in>Domain uf'" "b\<in>Domain uf'"
+        by (auto simp: UF'_def)
+        
+      from PER have PER': "part_equiv uf'"  
+        by (auto simp: UF'_def union_part_equivp)
+        
+      from u assms(4,5,6,7) part_equiv_refl'[OF PER' \<open>a\<in>Domain uf'\<close>]
+        part_equiv_refl'[OF PER' \<open>b\<in>Domain uf'\<close>] part_equiv_sym[OF PER']
+      have "(u,u') \<in> uf'"
         by auto
-      from comps preserve_component_union_impl[OF assms(2)]
-           same_component_trans[OF same_component_trans[OF _ this]]
-      show ?thesis
-        by auto
+        
+      have "(x,u)\<in>uf'" using comps per_union_impl UF'_def by auto
+      also note \<open>(u,u') \<in> uf'\<close>
+      also (part_equiv_trans[OF PER']) have "(u',y)\<in>uf'" using comps per_union_impl UF'_def by auto
+      finally (part_equiv_trans[OF PER']) show ?thesis by simp
     next
       case False
-      with assms(6,7,8,9) valid_graph.add_edge_was_path[OF assms(3) p(1)]
+      with assms(5-8) valid_graph.add_edge_was_path[OF assms(3) p(1)]
       have "valid_graph.is_path_undir H x p y"
         unfolding subgraph_def by auto
-      with assms(1,5,6,7) xy have "same_component uf x y"
+      with assms(1,2,5,6) xy have "per_compare uf x y"
         unfolding valid_union_find_graph_def
         by auto
-      with preserve_component_union_impl[OF assms(2)] show ?thesis
+      with per_union_impl UF'_def show ?thesis
         by simp
     qed
   next
-    assume asm: "same_component uf' x y"
+    assume asm: "per_compare uf' x y"
     show "\<exists>p. valid_graph.is_path_undir (add_edge a w b H) x p y"
-      proof (cases "same_component uf x y")
+      proof (cases "per_compare uf x y")
         case True
-        with assms(1,5) xy obtain p where "valid_graph.is_path_undir H x p y"
-          unfolding valid_union_find_graph_def
-          by blast
-        with valid_graph.add_edge_is_path[OF assms(3)] show ?thesis
+        with assms(1) xy obtain p where "valid_graph.is_path_undir H x p y"
+          unfolding valid_union_find_graph_def UF'_def
+          by simp blast 
+        with valid_graph.add_edge_is_path[OF assms(3) this] show ?thesis
           by auto
       next
         case False
-        with asm assms(5) preserve_component_union_impl_rev[OF assms(2)]
-        have "same_component uf x a \<and> same_component uf b y \<or>
-              same_component uf b x \<and> same_component uf y a"
-          by blast
+        with asm assms(5) 
+        have "per_compare uf x a \<and> per_compare uf b y \<or>
+              per_compare uf b x \<and> per_compare uf y a"
+          apply auto              
+          ctd here
+          
         with assms(1,5,6,7) xy obtain p q
           where "valid_graph.is_path_undir H x p a \<and> valid_graph.is_path_undir H b q y \<or>
                  valid_graph.is_path_undir H b p x \<and> valid_graph.is_path_undir H y q a"
@@ -332,7 +310,7 @@ lemma exists_min_spanning_tree_add:
   assumes "subgraph H G"
   assumes "forest H"
   assumes "(a,w,b) \<in> E"
-  assumes "\<not> same_component uf a b"
+  assumes "\<not> per_compare uf a b"
   assumes "valid_union_find_graph uf H"
   assumes "dom uf = V"
   assumes "\<forall>e\<in>E' - {(a, w, b)}. edges_less_eq (a, w, b) e"
@@ -429,7 +407,7 @@ proof -
       show False by simp
     qed
     with assms(9,10) valid_graph.E_validD[OF valid_T xy(1)] subgraph_T
-    have "\<not> same_component uf x y"
+    have "\<not> per_compare uf x y"
       unfolding valid_union_find_graph_def subgraph_def
       by auto
     with assms(2) xy(2) have "(x, w', y) \<notin> E - E'"
@@ -497,7 +475,7 @@ lemma loop_invar_init_preserve_component_add:
 
 lemma union_preserves_forest:
   assumes "forest H"
-  assumes "\<not> same_component uf a b"
+  assumes "\<not> per_compare uf a b"
   assumes "subgraph H G"
   assumes "dom uf = V"
   assumes "a \<in> V"
@@ -518,7 +496,7 @@ lemma union_preserves_loop_invar:
   assumes "in_component uf' a ca"
   assumes "in_component uf' b cb"
   assumes "ca \<noteq> cb"
-  assumes "same_component uf'' a b"
+  assumes "per_compare uf'' a b"
   assumes "E' \<subseteq> E"
   assumes "(a, w, b) \<in> E'"
   assumes "\<forall>e\<in>E' - {(a, w, b)}. edges_less_eq (a, w, b) e"
@@ -702,7 +680,7 @@ definition kruskal2 :: "('v, 'w) graph nres"
       (\<lambda>v uf. do {
         add_node_spec uf v
       }) empty_union_find;
-    (union_find, spanning_tree) \<leftarrow> nfoldli (quicksort_by_rel edges_less_eq [] l) (\<lambda>_. True)
+    (per, spanning_tree) \<leftarrow> nfoldli (quicksort_by_rel edges_less_eq [] l) (\<lambda>_. True)
       (\<lambda>(a, w, b) (uf, H). do {
         (uf', root_a) \<leftarrow> find_spec uf a;
         (uf'', root_b) \<leftarrow> find_spec uf' b;
@@ -742,7 +720,7 @@ definition kruskal3 :: "('v \<times> 'w \<times> 'v) list nres"
       (\<lambda>v uf. do {
         add_node_spec uf v
       }) empty_union_find;
-    (union_find, spanning_tree) \<leftarrow> nfoldli (quicksort_by_rel edges_less_eq [] l) (\<lambda>_. True)
+    (per, spanning_tree) \<leftarrow> nfoldli (quicksort_by_rel edges_less_eq [] l) (\<lambda>_. True)
       (\<lambda>(a, w, b) (uf, l_H). do {
         (uf', root_a) \<leftarrow> find_spec uf a;
         (uf'', root_b) \<leftarrow> find_spec uf' b;

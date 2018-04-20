@@ -484,7 +484,7 @@ begin
       from connected vv' obtain p where "is_path_undir v p v'"
         by auto
       with add_edge_is_path[OF this] show ?thesis
-        by simp
+        by auto
     qed
     with valid assms show ?thesis
       unfolding connected_graph_def connected_graph_axioms_def
