@@ -1,11 +1,11 @@
 theory SeprefUF
-imports IICF "Separation_Logic_Imperative_HOL.Union_Find"
+imports Refine_Imperative_HOL.IICF "Separation_Logic_Imperative_HOL.Union_Find"
 begin
 
   type_synonym 'a per = "('a\<times>'a) set"
 
 
-  definition [simp]: "per_init D \<equiv> {(i,i) | i. i\<in>D}"
+  definition "per_init D \<equiv> {(i,i) | i. i\<in>D}"
   definition [simp]: "per_compare R a b \<equiv> (a,b)\<in>R"
   
   definition per_init' :: "nat \<Rightarrow> nat per" where "per_init' n \<equiv> {(i,i) |i. i<n}"
@@ -14,12 +14,20 @@ begin
     by (auto simp: per_init_def per_init'_def)
   
   lemma per_init_per[simp, intro!]:
-    "part_equiv {(i,i) | i. i\<in>D}" by (auto simp: part_equiv_def sym_def trans_def)
-    
+    "part_equiv (per_init D)"
+    unfolding per_init_def
+    by (auto simp: part_equiv_def sym_def trans_def)
+
+  lemma per_init_self: "(a,b)\<in>per_init D \<Longrightarrow> a=b"
+    unfolding per_init_def by simp
   
   lemma per_union_impl: "(i,j)\<in>R \<Longrightarrow> (i,j)\<in>per_union R a b"  
     by (auto simp: per_union_def)
-    
+
+  lemma per_union_related:
+    "part_equiv R \<Longrightarrow> a\<in>Domain R \<Longrightarrow> b\<in>Domain  R \<Longrightarrow> (a,b)\<in>per_union R a b"
+    unfolding per_union_def
+    by (auto simp: part_equiv_refl)
     
   lemma part_equiv_refl':
     "part_equiv R \<Longrightarrow> x\<in>Domain R \<Longrightarrow> (x,x)\<in>R"
@@ -65,8 +73,5 @@ begin
   sepref_definition abs_test_impl is "uncurry0 abs_test" :: "unit_assn\<^sup>k \<rightarrow>\<^sub>a bool_assn" 
     unfolding abs_test_def
     by sepref
-  
-    
-
 
 end

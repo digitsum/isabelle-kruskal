@@ -15,12 +15,11 @@ definition empty_tree :: "('v, 'w) graph"
   where "empty_tree \<equiv> \<lparr> nodes = V, edges = {} \<rparr>"
 
 definition previous_edges_connected :: "'v per \<Rightarrow> ('v \<times> 'w \<times> 'v) set \<Rightarrow> bool"
-  where "previous_edges_connected l E' \<equiv> (\<forall>(a, w, b)\<in>E - E'.
-    per_compare l a b)"
+  where "previous_edges_connected uf E' \<equiv> (\<forall>(a, w, b)\<in>E - E'. (a,b)\<in> uf)"
 
 definition valid_union_find_graph :: "'v per \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool"
-  where "valid_union_find_graph uf H \<equiv> (\<forall>a\<in>Domain uf. \<forall>b\<in>Domain uf.
-      (\<exists>p. valid_graph.is_path_undir H a p b) \<longleftrightarrow> per_compare uf a b)"
+  where "valid_union_find_graph uf H \<equiv> (\<forall>a\<in>V. \<forall>b\<in>V.
+      (\<exists>p. valid_graph.is_path_undir H a p b) \<longleftrightarrow> (a,b) \<in> uf)"
 
 definition exists_min_spanning_tree :: "('v, 'w) graph \<Rightarrow> bool"
   where "exists_min_spanning_tree H \<equiv> (\<exists>T. subgraph H T \<and> is_minimum_spanning_tree T)"
@@ -36,27 +35,20 @@ definition loop_invar_kruskal :: "('v \<times> 'w \<times> 'v) set \<Rightarrow>
     Domain uf = V \<and>
     exists_min_spanning_tree H"
 
-(*definition loop_invar_init :: "'v set \<Rightarrow> 'v per \<Rightarrow> bool"
-  where "loop_invar_init V' uf \<equiv>
-    part_equiv uf \<and>
-    V' \<inter> Domain uf = {} \<and>
-    V' \<union> Domain uf = V"
-*)
-
 definition kruskal1 :: "('v, 'w) graph nres"
   where "kruskal1 \<equiv> do {
     let initial_union_find = per_init V;
-    
     (per, spanning_tree) \<leftarrow> FOREACHoi edges_less_eq loop_invar_kruskal E
       (\<lambda>(a, w, b) (uf, H). do {
         if per_compare uf a b
-        then do {
+        then
+          RETURN (uf, H)
+        else do {
           ASSERT (a\<in>Domain uf \<and> b\<in>Domain uf);
           let uf = per_union uf a b;
           ASSERT ((a, w, b) \<in> E - edges H);
           RETURN (uf, add_edge a w b H)
-        } else
-          RETURN (uf, H)
+        }
       }) (initial_union_find, empty_tree);
     RETURN spanning_tree
   }"
@@ -84,11 +76,10 @@ proof -
 qed
 
 lemma loop_invar_kruskal_empty:
-  defines "uf\<equiv>per_init V"
-  shows "loop_invar_kruskal E (uf, empty_tree)"
+  shows "loop_invar_kruskal E (per_init V, empty_tree)"
 proof -
-  have "(\<exists>p. valid_graph.is_path_undir empty_tree a p b) \<longleftrightarrow> per_compare uf a b"
-    if ab: "a\<in>Domain uf \<and> b\<in>Domain uf" for a b
+  have "(\<exists>p. valid_graph.is_path_undir empty_tree a p b) \<longleftrightarrow> (a,b) \<in> per_init V"
+    if ab: "a\<in>V \<and> b\<in>V" for a b
   proof
     assume "\<exists>p. valid_graph.is_path_undir empty_tree a p b"
     then obtain p where p: "valid_graph.is_path_undir empty_tree a p b"
@@ -96,26 +87,22 @@ proof -
     with valid_graph.is_path_undir.simps[OF empty_tree_valid] have "a = b"
       unfolding empty_tree_def
       by (induction rule:valid_graph.is_path_undir.induct[OF empty_tree_valid]) auto
-    with ab show "per_compare uf a b"
-      unfolding uf_def
-      by (auto intro: part_equiv_refl)
-      
+    with ab show "(a,b) \<in> per_init V"
+      by (auto intro: part_equiv_refl')
   next
-    assume "per_compare uf a b"
-    hence [simp]: "a=b" by (auto simp: uf_def)
-    
-    from valid_graph.is_path_undir.simps(1)[OF empty_tree_valid] ab assms
+    assume "(a,b) \<in> per_init V"
+    hence [simp]: "a=b" by (auto intro: per_init_self)
+    from valid_graph.is_path_undir.simps(1)[OF empty_tree_valid] ab
       have "valid_graph.is_path_undir empty_tree a [] a"
       unfolding empty_tree_def
       by auto    
     then show "\<exists>p. valid_graph.is_path_undir empty_tree a p b"
-      by auto 
-    
+      by auto
   qed
   with empty_exists_min_spanning_tree show ?thesis
-  unfolding uf_def loop_invar_kruskal_def empty_tree_def forest_def
+  unfolding loop_invar_kruskal_def empty_tree_def forest_def
     forest_axioms_def valid_graph_def subgraph_def previous_edges_connected_def
-    valid_union_find_graph_def 
+    valid_union_find_graph_def
   by auto
 qed
 
@@ -145,64 +132,34 @@ lemma loop_invar_kruskal_edge_not_in_graph:
   using assms
   unfolding loop_invar_kruskal_def by auto
 
-(*
-lemma preserve_previous_edges_connected:
-  assumes "previous_edges_connected uf E'"
-  assumes "preserve_component uf uf'"
-  assumes "dom uf = V"
-  shows "previous_edges_connected uf' E'"
-proof -
-  have "per_compare uf' a b" if e: "(a, w, b)\<in>E - E'" for a w b
-  proof -
-    from assms(1) e have "per_compare uf a b"
-      unfolding previous_edges_connected_def by blast
-    also from assms(3) e E_valid have "a \<in> dom uf \<and> b \<in> dom uf"
-      by blast
-    ultimately show ?thesis
-      using assms(2)
-      unfolding preserve_component_def same_component_def
-      by blast
-  qed
-  then show ?thesis
-    unfolding previous_edges_connected_def by auto
-qed
-*)
-
 lemma preserve_previous_edges_connected_no_add:
   assumes "previous_edges_connected uf E'"
   assumes "Domain uf = V"
-  assumes "per_compare uf a b"
+  assumes "(a,b) \<in> uf"
   shows "previous_edges_connected uf (E'-{(a, w, b)})"
 proof -
-  have "per_compare uf a b" if e: "(a, w, b)\<in>E - E'" for a w b
-  proof -
-    from assms(1) e have "per_compare uf a b"
-      unfolding previous_edges_connected_def by blast
-    also from assms(2) e E_valid have "a \<in> Domain uf \<and> b \<in> Domain uf"
-      by blast
-    ultimately show ?thesis
-      by blast
-  qed
+  from assms(1) have "(a,b)\<in>uf" if e: "(a, w, b)\<in>E - E'" for a w b
+    using e unfolding previous_edges_connected_def by blast
   with assms(3) show ?thesis
     unfolding previous_edges_connected_def by auto
 qed
 
 lemma preserve_previous_edges_connected_add:
   assumes "previous_edges_connected uf E'"
-  assumes "uf' = per_union uf a b"
+  assumes "part_equiv uf"
   assumes "Domain uf = V"
-  assumes "per_compare uf' a b"
-  shows "previous_edges_connected uf' (E'-{(a, w, b)})"
+  assumes "a \<in> V"
+  assumes "b \<in> V"
+  shows "previous_edges_connected (per_union uf a b) (E'-{(a, w, b)})"
   using assms
   unfolding previous_edges_connected_def
-  using per_union_impl[of _ _ uf a b]
+  using per_union_impl[of _ _ uf a b] per_union_related[of uf a b]
   by fastforce
 
 lemma preserve_valid_union_find_graph_add:
   assumes "valid_union_find_graph uf H"
   assumes UF'_def: "uf' = per_union uf a b"
   assumes "valid_graph H"
-  assumes "per_compare uf' a b"
   assumes "a \<in> Domain uf"
   assumes "b \<in> Domain uf"
   assumes "Domain uf = V"
@@ -210,13 +167,17 @@ lemma preserve_valid_union_find_graph_add:
   assumes PER: "part_equiv uf"
   shows "valid_union_find_graph uf' (add_edge a w b H)"
 proof -
-  have "(\<exists>p. valid_graph.is_path_undir (add_edge a w b H) x p y) \<longleftrightarrow> per_compare uf' x y"
-    if xy: "x\<in>Domain uf' \<and> y\<in>Domain uf'" for x y
+  have "(\<exists>p. valid_graph.is_path_undir (add_edge a w b H) x p y) \<longleftrightarrow> (x,y) \<in> uf'"
+    if xy: "x\<in>V \<and> y\<in>V" for x y
   proof
     assume "\<exists>p. valid_graph.is_path_undir (add_edge a w b H) x p y"
     then obtain p where p: "valid_graph.is_path_undir (add_edge a w b H) x p y"
       by blast
-    show "per_compare uf' x y"
+    from \<open>a\<in>Domain uf\<close> \<open>b\<in>Domain uf\<close> have [simp]: "a\<in>Domain uf'" "b\<in>Domain uf'"
+      by (auto simp: UF'_def)
+    from PER have PER': "part_equiv uf'"  
+      by (auto simp: UF'_def union_part_equivp)
+    show "(x,y) \<in> uf'"
     proof (cases "(a, w, b) \<in> set p \<or> (b, w, a) \<in> set p")
       case True
       from valid_graph.is_path_undir_split_distinct[OF add_edge_valid[OF assms(3)] p True]
@@ -227,63 +188,53 @@ proof -
         "(a, w, b) \<notin> set p' \<and> (b, w, a) \<notin> set p' \<and>
         (a, w, b) \<notin> set p'' \<and> (b, w, a) \<notin> set p''"
         by auto
-      with assms(5-8) valid_graph.add_edge_was_path[OF assms(3)]
+      with assms(4-7) valid_graph.add_edge_was_path[OF assms(3)]
       have "valid_graph.is_path_undir H x p' u \<and> valid_graph.is_path_undir H u' p'' y"
         unfolding subgraph_def by auto
-      with assms(1,2,5,6) xy u have comps: "per_compare uf x u \<and> per_compare uf u' y"
+      with assms(1,2,4,5,6) xy u have comps: "(x,u) \<in> uf \<and> (u', y) \<in> uf"
         unfolding valid_union_find_graph_def
         by auto
-        
-        
-      from \<open>a\<in>Domain uf\<close> \<open>b\<in>Domain uf\<close> have [simp]: "a\<in>Domain uf'" "b\<in>Domain uf'"
-        by (auto simp: UF'_def)
-        
-      from PER have PER': "part_equiv uf'"  
-        by (auto simp: UF'_def union_part_equivp)
-        
-      from u assms(4,5,6,7) part_equiv_refl'[OF PER' \<open>a\<in>Domain uf'\<close>]
+      have "(x,u)\<in>uf'" using comps per_union_impl UF'_def by auto
+      also from u assms(4-6) part_equiv_refl'[OF PER' \<open>a\<in>Domain uf'\<close>]
         part_equiv_refl'[OF PER' \<open>b\<in>Domain uf'\<close>] part_equiv_sym[OF PER']
+        per_union_related[OF PER] UF'_def
       have "(u,u') \<in> uf'"
         by auto
-        
-      have "(x,u)\<in>uf'" using comps per_union_impl UF'_def by auto
-      also note \<open>(u,u') \<in> uf'\<close>
       also (part_equiv_trans[OF PER']) have "(u',y)\<in>uf'" using comps per_union_impl UF'_def by auto
       finally (part_equiv_trans[OF PER']) show ?thesis by simp
     next
       case False
-      with assms(5-8) valid_graph.add_edge_was_path[OF assms(3) p(1)]
+      with assms(4-7) valid_graph.add_edge_was_path[OF assms(3) p(1)]
       have "valid_graph.is_path_undir H x p y"
         unfolding subgraph_def by auto
-      with assms(1,2,5,6) xy have "per_compare uf x y"
+      with assms(1) xy have "(x,y)\<in>uf"
         unfolding valid_union_find_graph_def
         by auto
       with per_union_impl UF'_def show ?thesis
         by simp
     qed
   next
-    assume asm: "per_compare uf' x y"
+    assume asm: "(x, y) \<in> uf'"
     show "\<exists>p. valid_graph.is_path_undir (add_edge a w b H) x p y"
-      proof (cases "per_compare uf x y")
+      proof (cases "(x, y) \<in> uf")
         case True
         with assms(1) xy obtain p where "valid_graph.is_path_undir H x p y"
-          unfolding valid_union_find_graph_def UF'_def
-          by simp blast 
+          unfolding valid_union_find_graph_def
+          by blast
         with valid_graph.add_edge_is_path[OF assms(3) this] show ?thesis
           by auto
       next
         case False
-        with asm assms(5) 
-        have "per_compare uf x a \<and> per_compare uf b y \<or>
-              per_compare uf b x \<and> per_compare uf y a"
-          apply auto              
-          ctd here
-          
-        with assms(1,5,6,7) xy obtain p q
+        with asm part_equiv_sym[OF PER]
+        have "(x,a) \<in> uf \<and> (b,y) \<in> uf \<or>
+              (b,x) \<in> uf \<and> (y,a) \<in> uf"
+          unfolding per_union_def UF'_def
+          by auto
+        with assms(1,2,4,5,6) xy obtain p q
           where "valid_graph.is_path_undir H x p a \<and> valid_graph.is_path_undir H b q y \<or>
                  valid_graph.is_path_undir H b p x \<and> valid_graph.is_path_undir H y q a"
           unfolding valid_union_find_graph_def
-          by metis
+          by blast
         with valid_graph.add_edge_is_path[OF assms(3)] obtain p' q'
           where "valid_graph.is_path_undir (add_edge a w b H) x p' a \<and>
                 valid_graph.is_path_undir (add_edge a w b H) b q' y \<or>
@@ -310,9 +261,9 @@ lemma exists_min_spanning_tree_add:
   assumes "subgraph H G"
   assumes "forest H"
   assumes "(a,w,b) \<in> E"
-  assumes "\<not> per_compare uf a b"
+  assumes "(a,b) \<notin> uf"
   assumes "valid_union_find_graph uf H"
-  assumes "dom uf = V"
+  assumes "Domain uf = V"
   assumes "\<forall>e\<in>E' - {(a, w, b)}. edges_less_eq (a, w, b) e"
   shows "exists_min_spanning_tree (add_edge a w b H)"
 proof -
@@ -407,7 +358,7 @@ proof -
       show False by simp
     qed
     with assms(9,10) valid_graph.E_validD[OF valid_T xy(1)] subgraph_T
-    have "\<not> per_compare uf x y"
+    have "(x,y)\<notin>uf"
       unfolding valid_union_find_graph_def subgraph_def
       by auto
     with assms(2) xy(2) have "(x, w', y) \<notin> E - E'"
@@ -449,95 +400,53 @@ proof -
   qed
 qed
 
-lemma loop_invar_kruskal_preserve_component:
-  assumes "loop_invar_kruskal E' (uf, H)"
-  assumes "preserve_component uf uf'"
-  assumes "valid_union_find uf'"
-  assumes "dom uf = dom uf'"
-  shows "loop_invar_kruskal E' (uf', H)"
-  using assms
-        preserve_previous_edges_connected[OF _ assms(2)]
-        preserve_valid_union_find_graph[OF _ assms(2)]
-  unfolding loop_invar_kruskal_def
-  by auto
-
-lemma loop_invar_init_preserve_component_add:
-  assumes "loop_invar_init V' uf"
-  assumes "preserve_component uf uf'"
-  assumes "valid_union_find uf'"
-  assumes "v\<in>V'"
-  assumes "dom uf' = insert v (dom uf)"
-  assumes "in_component uf' v v"
-  shows "loop_invar_init (V'-{v}) uf'"
-  using assms preserve_component_impl[OF assms(2)]
-  unfolding loop_invar_init_def
-  by auto
-
 lemma union_preserves_forest:
   assumes "forest H"
-  assumes "\<not> per_compare uf a b"
+  assumes "\<not> (a,b) \<in> uf"
   assumes "subgraph H G"
-  assumes "dom uf = V"
+  assumes "Domain uf = V"
   assumes "a \<in> V"
   assumes "b \<in> V"
   assumes "valid_union_find_graph uf H"
   shows "forest (add_edge a w b H)"
   using assms forest_add_edge[of H]
   unfolding valid_union_find_graph_def subgraph_def
-  by fast
+  by metis
 
 lemma union_preserves_loop_invar:
   assumes "loop_invar_kruskal E' (uf, H)"
-  assumes "preserve_component uf uf'"
-  assumes "preserve_component_union uf' uf'' a b"
-  assumes "dom uf = dom uf''"
-  assumes "dom uf' = dom uf''"
-  assumes "valid_union_find uf''"
-  assumes "in_component uf' a ca"
-  assumes "in_component uf' b cb"
-  assumes "ca \<noteq> cb"
-  assumes "per_compare uf'' a b"
+  assumes "(a,b) \<notin> uf"
   assumes "E' \<subseteq> E"
   assumes "(a, w, b) \<in> E'"
   assumes "\<forall>e\<in>E' - {(a, w, b)}. edges_less_eq (a, w, b) e"
-  shows "loop_invar_kruskal (E' - {(a, w, b)}) (uf'', add_edge a w b H)"
-  using assms not_same_component[OF assms(7,8,9)]
-        E_validD preserve_valid_union_find_graph[OF _ assms(2)]
-        union_preserves_forest
-        add_edge_preserve_subgraph
-        exists_min_spanning_tree_add[OF _ preserve_previous_edges_connected[OF _ assms(2)]]
-        preserve_previous_edges_connected_add[OF _ preserve_component_union_trans]
-        preserve_valid_union_find_graph_add[OF _ preserve_component_union_trans
-                                            loop_invar_kruskal_valid_graph]
+  shows "loop_invar_kruskal (E' - {(a, w, b)}) (per_union uf a b, add_edge a w b H)"
+  using assms preserve_previous_edges_connected_add union_preserves_forest
+    preserve_valid_union_find_graph_add[OF _ _ loop_invar_kruskal_valid_graph]
+    add_edge_preserve_subgraph exists_min_spanning_tree_add
   unfolding loop_invar_kruskal_def
-  by auto
+  by (auto simp: union_part_equivp E_validD)
 
 lemma same_component_preserves_loop_invar:
   assumes "loop_invar_kruskal E' (uf, H)"
-  assumes "preserve_component uf uf'"
-  assumes "valid_union_find uf'"
-  assumes "dom uf = dom uf'"
-  assumes "in_component uf' a c"
-  assumes "in_component uf' b c"
-  shows "loop_invar_kruskal (E' - {(a, w, b)}) (uf', H)"
-  using assms preserve_previous_edges_connected_no_add[OF _ assms(2)]
-        preserve_valid_union_find_graph[OF _ assms(2)]
-  unfolding loop_invar_kruskal_def same_component_def
-  by fast
+  assumes "(a,b)\<in>uf"
+  shows "loop_invar_kruskal (E' - {(a, w, b)}) (uf, H)"
+  using assms preserve_previous_edges_connected_no_add
+  unfolding loop_invar_kruskal_def
+  by auto
 
 lemma loop_invar_node_exists:
   assumes "loop_invar_kruskal E' (uf, H)"
   assumes "E' \<subseteq> E"
   assumes "(a, w, b) \<in> E'"
-  shows "(\<exists>node_a. uf a = Some node_a)" and "(\<exists>node_b. uf b = Some node_b)"
+  shows "a\<in>Domain uf" and "b\<in>Domain uf"
   using assms E_valid
   unfolding loop_invar_kruskal_def
-  by auto blast+
+  by blast+
 
 lemma all_connected_edges:
   assumes "valid_graph H"
   assumes "subgraph H G"
-  assumes "dom uf = V"
+  assumes "Domain uf = V"
   assumes "previous_edges_connected uf {}"
   assumes "valid_union_find_graph uf H"
   shows "connected_graph H"
@@ -566,28 +475,15 @@ proof -
 qed
 
 theorem kruskal1_spanning_tree: "(kruskal1, SPEC is_minimum_spanning_tree)\<in>\<langle>Id\<rangle>nres_rel"
-  unfolding kruskal1_def add_node_spec_def find_spec_def union_spec_def
+  unfolding kruskal1_def
   apply(refine_vcg)
-  apply (rule finite_V)
-  apply (simp add: loop_invar_init_empty)
-  apply simp
-  apply (simp add: loop_invar_init_not_exist)
-  apply (simp add: loop_invar_init_preserve_component_add)
   apply (rule finite_E)
-  apply (simp add: loop_invar_kruskal_empty)
-  apply (fastforce simp: loop_invar_node_exists)
-  apply simp
-  apply (fastforce simp: loop_invar_node_exists)
-  apply simp
-  apply (fast elim: preserve_component_trans)
-  apply (fastforce simp: preserve_component_impl)
-  apply (fastforce simp: preserve_component_impl)
-  apply simp
-  apply simp
-  apply simp
-  apply (meson loop_invar_kruskal_edge_not_in_graph)
-  apply (fastforce simp: union_preserves_loop_invar)
+  apply (rule loop_invar_kruskal_empty)
   apply (fastforce simp: same_component_preserves_loop_invar)
+  apply (fastforce simp: loop_invar_node_exists)
+  apply (fastforce simp: loop_invar_node_exists)
+  apply (meson loop_invar_kruskal_edge_not_in_graph)
+  apply (simp add: union_preserves_loop_invar)
   apply (simp add: loop_invar_kruskal_final)
   done
 
@@ -644,22 +540,11 @@ corollary E_impl:
   using l_G_refine unfolding lst_graph_rel_def lst_graph_invar_def
   by (auto simp: in_br_conv)
 
-definition "init_uf \<equiv> FOREACHi loop_invar_init V
-      (\<lambda>v uf. do {
-        add_node_spec uf v
-      }) empty_union_find"
-      
-definition "init_uf2 \<equiv> nfoldli V_impl (\<lambda>_. True)
-      (\<lambda>v uf. do {
-        add_node_spec uf v
-      }) empty_union_find"
-      
-lemma init_uf_refine: "(init_uf2, init_uf) \<in> \<langle>Id\<rangle>nres_rel"
-  unfolding init_uf2_def init_uf_def
-  apply (refine_vcg LFOi_refine[OF V_impl_refine])
-  apply auto
-  done
 
+lemma init_uf_refine: "per_init (set V_impl) = per_init V"
+  using V_impl_refine
+  unfolding set_rel_def list_set_rel_def
+  by (auto simp: in_br_conv)
 
 definition "kruskal_loop_tmpl B I \<equiv> FOREACHoi edges_less_eq loop_invar_kruskal E B I"  
 definition "kruskal_loop_tmpl2 B I \<equiv> nfoldli (quicksort_by_rel edges_less_eq [] l) (\<lambda>_. True) B I"
@@ -676,33 +561,27 @@ lemma kruskal_loop_tmpl_refine: "(kruskal_loop_tmpl2,kruskal_loop_tmpl) \<in> Id
 
 definition kruskal2 :: "('v, 'w) graph nres"
   where "kruskal2 \<equiv> do {
-    initial_union_find \<leftarrow> nfoldli V_impl (\<lambda>_. True)
-      (\<lambda>v uf. do {
-        add_node_spec uf v
-      }) empty_union_find;
+    let initial_union_find = per_init (set V_impl);
     (per, spanning_tree) \<leftarrow> nfoldli (quicksort_by_rel edges_less_eq [] l) (\<lambda>_. True)
       (\<lambda>(a, w, b) (uf, H). do {
-        (uf', root_a) \<leftarrow> find_spec uf a;
-        (uf'', root_b) \<leftarrow> find_spec uf' b;
-        ASSERT (preserve_component uf uf'' \<and> in_component uf'' a root_a \<and> in_component uf'' b root_b);
-        if root_a \<noteq> root_b
-        then do {
-          uf''' \<leftarrow> union_spec uf'' a b;
-          ASSERT ((a, w, b) \<in> set l - edges H);
-          RETURN (uf''', add_edge a w b H)
-        } else
-          RETURN (uf'', H)
+        if per_compare uf a b
+        then
+          RETURN (uf, H)
+        else do {
+          ASSERT (a\<in>Domain uf \<and> b\<in>Domain uf);
+          let uf = per_union uf a b;
+          ASSERT ((a, w, b) \<in> E - edges H);
+          RETURN (uf, add_edge a w b H)
+        }
       }) (initial_union_find, empty_tree);
     RETURN spanning_tree
   }"
 
 theorem kruskal2_refine: "(kruskal2, kruskal1)\<in>\<langle>Id\<rangle>nres_rel"
   unfolding kruskal2_def kruskal1_def
-  apply (fold init_uf2_def init_uf_def)
   apply (fold kruskal_loop_tmpl_def kruskal_loop_tmpl2_def)
-  apply (simp only: E_impl)
-  apply (refine_vcg init_uf_refine[THEN nres_relD] kruskal_loop_tmpl_refine[param_fo,THEN nres_relD] inj_on_id)
-  apply (vc_solve)
+  apply (refine_vcg kruskal_loop_tmpl_refine[param_fo,THEN nres_relD] inj_on_id)
+  apply (vc_solve simp only: init_uf_refine)
   done
 
 section \<open>Kruskal 3\<close>
@@ -716,51 +595,43 @@ definition "lst_empty_tree \<equiv> []"
 
 definition kruskal3 :: "('v \<times> 'w \<times> 'v) list nres"
   where "kruskal3 \<equiv> do {
-    initial_union_find \<leftarrow> nfoldli V_impl (\<lambda>_. True)
-      (\<lambda>v uf. do {
-        add_node_spec uf v
-      }) empty_union_find;
+    let initial_union_find = per_init (set V_impl);
     (per, spanning_tree) \<leftarrow> nfoldli (quicksort_by_rel edges_less_eq [] l) (\<lambda>_. True)
       (\<lambda>(a, w, b) (uf, l_H). do {
-        (uf', root_a) \<leftarrow> find_spec uf a;
-        (uf'', root_b) \<leftarrow> find_spec uf' b;
-        ASSERT (preserve_component uf uf'' \<and> in_component uf'' a root_a \<and> in_component uf'' b root_b);
-        if root_a \<noteq> root_b
-        then do {
-          uf''' \<leftarrow> union_spec uf'' a b;
+        if per_compare uf a b
+        then
+          RETURN (uf, l_H)
+        else do {
+          ASSERT (a\<in>Domain uf \<and> b\<in>Domain uf);
+          let uf = per_union uf a b;
           ASSERT ((a, w, b) \<in> set l - set l_H);
-          RETURN (uf''', (a, w, b)#l_H)
-        } else
-          RETURN (uf'', l_H)
+          RETURN (uf, (a, w, b)#l_H)
+        }
       }) (initial_union_find, lst_empty_tree);
     RETURN spanning_tree
   }"
 
-definition "kruskal_loop_body2 a w b uf H \<equiv> do {
-        (uf', root_a) \<leftarrow> find_spec uf a;
-        (uf'', root_b) \<leftarrow> find_spec uf' b;
-        ASSERT (preserve_component uf uf'' \<and> in_component uf'' a root_a \<and> in_component uf'' b root_b);
-        if root_a \<noteq> root_b
-        then do {
-          uf''' \<leftarrow> union_spec uf'' a b;
-          ASSERT ((a, w, b) \<in> set l - edges H);
-          RETURN (uf''', add_edge a w b H)
-        } else
-          RETURN (uf'', H)
-      }"
+definition "kruskal_loop_body2 a w b uf H \<equiv>
+        if per_compare uf a b
+        then
+          RETURN (uf, H)
+        else do {
+          ASSERT (a\<in>Domain uf \<and> b\<in>Domain uf);
+          let uf = per_union uf a b;
+          ASSERT ((a, w, b) \<in> E - edges H);
+          RETURN (uf, add_edge a w b H)
+        }"
 
-definition "kruskal_loop_body3 a w b uf l_H \<equiv> do {
-        (uf', root_a) \<leftarrow> find_spec uf a;
-        (uf'', root_b) \<leftarrow> find_spec uf' b;
-        ASSERT (preserve_component uf uf'' \<and> in_component uf'' a root_a \<and> in_component uf'' b root_b);
-        if root_a \<noteq> root_b
-        then do {
-          uf''' \<leftarrow> union_spec uf'' a b;
+definition "kruskal_loop_body3 a w b uf l_H \<equiv>
+        if per_compare uf a b
+        then
+          RETURN (uf, l_H)
+        else do {
+          ASSERT (a\<in>Domain uf \<and> b\<in>Domain uf);
+          let uf = per_union uf a b;
           ASSERT ((a, w, b) \<in> set l - set l_H);
-          RETURN (uf''', (a, w, b)#l_H)
-        } else
-          RETURN (uf'', l_H)
-      }"
+          RETURN (uf, (a, w, b)#l_H)
+        }"
 
 
 lemma empty_tree_refine: "(lst_empty_tree, empty_tree) \<in> lst_subgraph_rel"
@@ -780,11 +651,10 @@ lemma kruskal_loop_body_refine: "(kruskal_loop_body3, kruskal_loop_body2)\<in>Id
     \<rightarrow> lst_subgraph_rel \<rightarrow> \<langle>{((uf, l_H), (uf', H)) | uf uf' l_H H. (uf, uf') \<in> Id \<and> (l_H, H) \<in> lst_subgraph_rel}\<rangle>nres_rel"
   unfolding kruskal_loop_body3_def kruskal_loop_body2_def
   apply (refine_vcg)
-  apply refine_dref_type
   apply (vc_solve simp: add_edge_refine)
-  unfolding lst_subgraph_rel_def
-  apply (simp add: in_br_conv)
-  done
+  using E_impl_refine
+  unfolding lst_subgraph_rel_def list_set_rel_def
+  by (auto simp: in_br_conv)
 
 theorem kruskal3_refine: "(kruskal3, kruskal2)\<in>\<langle>lst_subgraph_rel\<rangle>nres_rel"
   unfolding kruskal3_def kruskal2_def
@@ -794,12 +664,57 @@ theorem kruskal3_refine: "(kruskal3, kruskal2)\<in>\<langle>lst_subgraph_rel\<ra
   apply (vc_solve simp: empty_tree_refine)
   done
 
-sepref_definition kruskalN_spec is
-  "uncurry0 kruskal3" :: "unit_assn\<^sup>k \<rightarrow>\<^sub>a id_assn"
-  unfolding kruskal3_def
-  oops (* by sepref *)
+end
+end
+
+locale Kruskal_nat =
+  fixes l :: "(nat \<times> nat \<times> nat) list"
+  assumes distinct: "distinct l"
+  assumes Kruskal_G: "Kruskal \<lparr>nodes = fst`set l \<union> (snd o snd)`set l, edges = set l \<rparr>"
+  assumes nat_nodes: "N = card (fst`set l \<union> (snd o snd)`set l) \<Longrightarrow> fst`set l \<union> (snd o snd)`set l = {i. i<N}"
+begin
+
+abbreviation "G\<equiv>\<lparr>nodes = fst`set l \<union> (snd o snd)`set l, edges = set l \<rparr>"
+
+lemma l_G_refine: "(l, G) \<in> Kruskal.lst_graph_rel"
+  unfolding Kruskal.lst_graph_rel_def[OF Kruskal_G] Kruskal.lst_graph_invar_def[OF Kruskal_G]
+  by (auto simp: in_br_conv distinct)
+
+definition kruskal4 :: "(nat \<times> nat \<times> nat) list nres"
+  where "kruskal4 \<equiv> do {
+    let initial_union_find = per_init' (length (Kruskal.V_impl l));
+    (per, spanning_tree) \<leftarrow> nfoldli (quicksort_by_rel weighted_graph.edges_less_eq [] l) (\<lambda>_. True)
+      (\<lambda>(a, w, b) (uf, l_H). do {
+        if per_compare uf a b
+        then
+          RETURN (uf, l_H)
+        else do {
+          let uf = per_union uf a b;
+          RETURN (uf, (a, w, b)#l_H)
+        }
+      }) (initial_union_find, []);
+    RETURN spanning_tree
+  }"
+
+lemma per_init_refine: "per_init' (length (Kruskal.V_impl l)) = per_init (set (Kruskal.V_impl l))"
+  using Kruskal.V_impl_refine[OF Kruskal_G l_G_refine]
+  unfolding list_set_rel_def
+  apply (simp add: in_br_conv)
+  using distinct_card nat_nodes[of "length (Kruskal.V_impl l)"] per_init_of_nat_range[symmetric]
+  by fastforce
+
+theorem kruskal4_refine: "(kruskal4, Kruskal.kruskal3 l)\<in>\<langle>Id\<rangle>nres_rel"
+  unfolding kruskal4_def Kruskal.kruskal3_def[OF Kruskal_G l_G_refine] Kruskal.lst_empty_tree_def[OF Kruskal_G l_G_refine]
+  apply (refine_vcg)
+  apply refine_dref_type
+  apply (vc_solve simp: per_init_refine)
+  done
+
+sepref_thm kruskal is
+  "uncurry0 kruskal4" :: "unit_assn\<^sup>k \<rightarrow>\<^sub>a id_assn"
+  unfolding kruskal4_def
+  oops (* apply sepref *)
 
 end
 
-end
 end
