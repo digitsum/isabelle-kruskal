@@ -95,7 +95,7 @@ proof -
     from valid_graph.is_path_undir.simps(1)[OF empty_tree_valid] ab
       have "valid_graph.is_path_undir empty_tree a [] a"
       unfolding empty_tree_def
-      by auto    
+      by auto
     then show "\<exists>p. valid_graph.is_path_undir empty_tree a p b"
       by auto
   qed
@@ -175,7 +175,7 @@ proof -
       by blast
     from \<open>a\<in>Domain uf\<close> \<open>b\<in>Domain uf\<close> have [simp]: "a\<in>Domain uf'" "b\<in>Domain uf'"
       by (auto simp: UF'_def)
-    from PER have PER': "part_equiv uf'"  
+    from PER have PER': "part_equiv uf'"
       by (auto simp: UF'_def union_part_equivp)
     show "(x,y) \<in> uf'"
     proof (cases "(a, w, b) \<in> set p \<or> (b, w, a) \<in> set p")
@@ -240,7 +240,7 @@ proof -
                 valid_graph.is_path_undir (add_edge a w b H) b q' y \<or>
                 valid_graph.is_path_undir (add_edge a w b H) b p' x \<and>
                 valid_graph.is_path_undir (add_edge a w b H) y q' a"
-          by blast 
+          by blast
         with valid_graph.is_path_undir_split'[OF add_edge_valid[OF assms(3)]]
         have "valid_graph.is_path_undir (add_edge a w b H) x (p' @ (a, w, b) # q') y \<or>
               valid_graph.is_path_undir (add_edge a w b H) y (q' @ (a, w, b) # p') x"
@@ -489,10 +489,10 @@ theorem kruskal1_spanning_tree: "(kruskal1, SPEC is_minimum_spanning_tree)\<in>\
 
 section \<open>Kruskal 2\<close>
 
-definition "lst_graph_invar l \<equiv> distinct l"    
-definition "lst_graph_rel \<equiv> br (\<lambda>l. \<lparr> 
-  nodes = fst`set l \<union> (snd o snd)`set l, 
-  edges = set l \<rparr>) lst_graph_invar"
+definition (in -) "graph_of_list l \<equiv> \<lparr>nodes = fst`set l \<union> (snd o snd)`set l, edges = set l \<rparr>"
+
+definition (in -) "lst_graph_invar l \<equiv> distinct l"
+definition (in -) "lst_graph_rel \<equiv> br graph_of_list lst_graph_invar"
 
 lemma mset_eq_impl_distinct_iff: "mset x = mset y \<Longrightarrow> distinct x = distinct y"
   by (metis distinct_count_atmost_1 set_mset_mset)
@@ -511,45 +511,52 @@ lemma it_to_sorted_list_by_quicksort:
 lemma quicksort_nfoldli_refine_foreachoci:
   assumes "is_linorder_rel R"
   assumes "(l,s)\<in>\<langle>Id\<rangle>list_set_rel" and [simplified,simp]: "(c,c')\<in>Id" "(f,f')\<in>Id" "(\<sigma>,\<sigma>')\<in>Id"
-  shows "nfoldli (quicksort_by_rel R [] l) c f \<sigma> \<le> \<Down>Id (FOREACHoci R I s c' f' \<sigma>')"  
+  shows "nfoldli (quicksort_by_rel R [] l) c f \<sigma> \<le> \<Down>Id (FOREACHoci R I s c' f' \<sigma>')"
   apply simp
   apply (rule order_trans[OF _ FOREACHoci_itsl])
   using it_to_sorted_list_by_quicksort[OF assms(1), param_fo, THEN nres_relD] assms(2)
   by (auto simp: refine_pw_simps pw_le_iff)
 
-  
-context   
+definition (in -) "V_impl_aux l \<equiv> remdups (map fst l @ map (snd o snd) l)"
+
+definition (in -) "subgraph_of_lst G l \<equiv> \<lparr>
+  nodes = nodes G,
+  edges = set l \<rparr>"
+definition (in -) "lst_subgraph_rel G \<equiv> br (subgraph_of_lst G) lst_graph_invar"
+
+
+context
   fixes l
   assumes l_G_refine: "(l,G) \<in> lst_graph_rel"
 begin
 
-definition "V_impl \<equiv> remdups (map fst l @ map (snd o snd) l)"
+abbreviation "V_impl \<equiv> V_impl_aux l"
 
 lemma V_impl_refine:
   shows "(V_impl,V) \<in> \<langle>Id\<rangle>list_set_rel"
-  using l_G_refine unfolding lst_graph_rel_def list_set_rel_def lst_graph_invar_def V_impl_def
-  by (auto simp: in_br_conv)
-  
-lemma E_impl_refine:  
+  using l_G_refine unfolding lst_graph_rel_def list_set_rel_def lst_graph_invar_def V_impl_aux_def
+  by (auto simp: in_br_conv graph_of_list_def)
+
+lemma E_impl_refine:
   "(l, E) \<in> \<langle>Id\<rangle>list_set_rel"
   using l_G_refine unfolding lst_graph_rel_def list_set_rel_def lst_graph_invar_def
-  by (auto simp: in_br_conv intro: distinct_mapI)
+  by (auto simp: in_br_conv graph_of_list_def intro: distinct_mapI)
 
 corollary E_impl:
   "set l = E"
   using l_G_refine unfolding lst_graph_rel_def lst_graph_invar_def
-  by (auto simp: in_br_conv)
+  by (auto simp: in_br_conv graph_of_list_def)
 
 
-lemma init_uf_refine: "per_init (set V_impl) = per_init V"
+lemma init_uf_refine: "per_init (set (V_impl)) = per_init V"
   using V_impl_refine
   unfolding set_rel_def list_set_rel_def
   by (auto simp: in_br_conv)
 
-definition "kruskal_loop_tmpl B I \<equiv> FOREACHoi edges_less_eq loop_invar_kruskal E B I"  
+definition "kruskal_loop_tmpl B I \<equiv> FOREACHoi edges_less_eq loop_invar_kruskal E B I"
 definition "kruskal_loop_tmpl2 B I \<equiv> nfoldli (quicksort_by_rel edges_less_eq [] l) (\<lambda>_. True) B I"
-  
-lemma edges_less_eq_linorder: "is_linorder_rel edges_less_eq" 
+
+lemma edges_less_eq_linorder: "is_linorder_rel edges_less_eq"
   unfolding edges_less_eq_def is_linorder_rel_def
   by (metis linear order_trans)
 
@@ -585,10 +592,6 @@ theorem kruskal2_refine: "(kruskal2, kruskal1)\<in>\<langle>Id\<rangle>nres_rel"
   done
 
 section \<open>Kruskal 3\<close>
-
-definition "lst_subgraph_rel \<equiv> br (\<lambda>l. \<lparr> 
-  nodes = V,
-  edges = set l \<rparr>) lst_graph_invar"
 
 definition "lst_empty_tree \<equiv> []"
 
@@ -634,29 +637,29 @@ definition "kruskal_loop_body3 a w b uf l_H \<equiv>
         }"
 
 
-lemma empty_tree_refine: "(lst_empty_tree, empty_tree) \<in> lst_subgraph_rel"
-  unfolding empty_tree_def lst_empty_tree_def lst_subgraph_rel_def lst_graph_invar_def
+lemma empty_tree_refine: "(lst_empty_tree, empty_tree) \<in> lst_subgraph_rel G"
+  unfolding empty_tree_def lst_empty_tree_def lst_subgraph_rel_def lst_graph_invar_def subgraph_of_lst_def
   by (auto simp: in_br_conv)
 
 lemma add_edge_refine:
-  assumes "(l_H, H) \<in> lst_subgraph_rel"
+  assumes "(l_H, H) \<in> lst_subgraph_rel G"
   assumes "(a, w, b) \<in> set l - set l_H"
-  shows "((a, w, b) # l_H, add_edge a w b H) \<in> lst_subgraph_rel"
+  shows "((a, w, b) # l_H, add_edge a w b H) \<in> lst_subgraph_rel G"
   using assms E_impl_refine
-  unfolding add_edge_def lst_subgraph_rel_def lst_graph_invar_def list_set_rel_def
+  unfolding add_edge_def lst_subgraph_rel_def lst_graph_invar_def list_set_rel_def subgraph_of_lst_def
   by (auto simp: in_br_conv E_validD)
 
 
 lemma kruskal_loop_body_refine: "(kruskal_loop_body3, kruskal_loop_body2)\<in>Id \<rightarrow> Id \<rightarrow> Id \<rightarrow> Id
-    \<rightarrow> lst_subgraph_rel \<rightarrow> \<langle>{((uf, l_H), (uf', H)) | uf uf' l_H H. (uf, uf') \<in> Id \<and> (l_H, H) \<in> lst_subgraph_rel}\<rangle>nres_rel"
+    \<rightarrow> lst_subgraph_rel G \<rightarrow> \<langle>{((uf, l_H), (uf', H)) | uf uf' l_H H. (uf, uf') \<in> Id \<and> (l_H, H) \<in> lst_subgraph_rel G}\<rangle>nres_rel"
   unfolding kruskal_loop_body3_def kruskal_loop_body2_def
   apply (refine_vcg)
   apply (vc_solve simp: add_edge_refine)
   using E_impl_refine
-  unfolding lst_subgraph_rel_def list_set_rel_def
+  unfolding lst_subgraph_rel_def list_set_rel_def subgraph_of_lst_def
   by (auto simp: in_br_conv)
 
-theorem kruskal3_refine: "(kruskal3, kruskal2)\<in>\<langle>lst_subgraph_rel\<rangle>nres_rel"
+theorem kruskal3_refine: "(kruskal3, kruskal2)\<in>\<langle>lst_subgraph_rel G\<rangle>nres_rel"
   unfolding kruskal3_def kruskal2_def
   apply (fold kruskal_loop_body3_def kruskal_loop_body2_def)
   apply (refine_vcg kruskal_loop_body_refine[param_fo, THEN nres_relD])
@@ -667,6 +670,19 @@ theorem kruskal3_refine: "(kruskal3, kruskal2)\<in>\<langle>lst_subgraph_rel\<ra
 end
 end
 
+term "\<exists>N. nodes (graph_of_list l) = {i. i<N}"
+
+locale Kruskal_nat = Kruskal "graph_of_list l" for
+  l :: "(nat \<times> nat \<times> nat) list" +
+  assumes distinct: "distinct l"
+  (*
+  assumes nat_nodes: "N = card (fst`set l \<union> (snd o snd)`set l) \<Longrightarrow> fst`set l \<union> (snd o snd)`set l = {i. i<N}"
+  *)
+  assumes nat_nodes': "\<exists>N. nodes (graph_of_list l) = {i. i<N}"
+begin
+
+
+(*
 locale Kruskal_nat =
   fixes l :: "(nat \<times> nat \<times> nat) list"
   assumes distinct: "distinct l"
@@ -674,21 +690,26 @@ locale Kruskal_nat =
   assumes nat_nodes: "N = card (fst`set l \<union> (snd o snd)`set l) \<Longrightarrow> fst`set l \<union> (snd o snd)`set l = {i. i<N}"
 begin
 
-abbreviation "G\<equiv>\<lparr>nodes = fst`set l \<union> (snd o snd)`set l, edges = set l \<rparr>"
+sublocale Kruskal "\<lparr>nodes = fst`set l \<union> (snd o snd)`set l, edges = set l \<rparr>"
+  using Kruskal_G .
+*)
 
-lemma l_G_refine: "(l, G) \<in> Kruskal.lst_graph_rel"
-  unfolding Kruskal.lst_graph_rel_def[OF Kruskal_G] Kruskal.lst_graph_invar_def[OF Kruskal_G]
+abbreviation "G\<equiv>graph_of_list l"
+
+lemma l_G_refine: "(l, G) \<in> lst_graph_rel"
+  unfolding lst_graph_rel_def lst_graph_invar_def
   by (auto simp: in_br_conv distinct)
 
 definition kruskal4 :: "(nat \<times> nat \<times> nat) list nres"
   where "kruskal4 \<equiv> do {
-    let initial_union_find = per_init' (length (Kruskal.V_impl l));
-    (per, spanning_tree) \<leftarrow> nfoldli (quicksort_by_rel weighted_graph.edges_less_eq [] l) (\<lambda>_. True)
+    let initial_union_find = per_init' (length (V_impl l));
+    (per, spanning_tree) \<leftarrow> nfoldli (quicksort_by_rel edges_less_eq [] l) (\<lambda>_. True)
       (\<lambda>(a, w, b) (uf, l_H). do {
         if per_compare uf a b
         then
           RETURN (uf, l_H)
         else do {
+          ASSERT (a\<in>Domain uf \<and> b\<in>Domain uf);
           let uf = per_union uf a b;
           RETURN (uf, (a, w, b)#l_H)
         }
@@ -696,19 +717,144 @@ definition kruskal4 :: "(nat \<times> nat \<times> nat) list nres"
     RETURN spanning_tree
   }"
 
-lemma per_init_refine: "per_init' (length (Kruskal.V_impl l)) = per_init (set (Kruskal.V_impl l))"
-  using Kruskal.V_impl_refine[OF Kruskal_G l_G_refine]
+lemma per_init_refine: "per_init' (length (V_impl l)) = per_init (set (V_impl l))"
+  using V_impl_refine[OF l_G_refine]
   unfolding list_set_rel_def
   apply (simp add: in_br_conv)
-  using distinct_card nat_nodes[of "length (Kruskal.V_impl l)"] per_init_of_nat_range[symmetric]
+  using distinct_card nat_nodes' per_init_of_nat_range[symmetric]
   by fastforce
 
 theorem kruskal4_refine: "(kruskal4, Kruskal.kruskal3 l)\<in>\<langle>Id\<rangle>nres_rel"
-  unfolding kruskal4_def Kruskal.kruskal3_def[OF Kruskal_G l_G_refine] Kruskal.lst_empty_tree_def[OF Kruskal_G l_G_refine]
+  unfolding kruskal4_def kruskal3_def[OF l_G_refine] lst_empty_tree_def[OF l_G_refine]
   apply (refine_vcg)
   apply refine_dref_type
   apply (vc_solve simp: per_init_refine)
   done
+
+end
+
+concrete_definition kruskal5 uses Kruskal_nat.kruskal4_def
+print_theorems
+
+definition "sort_edges \<equiv> quicksort_by_rel edges_less_eq []"
+
+lemma [sepref_import_param]: "(V_impl_aux,V_impl_aux) \<in> \<langle>Id\<times>\<^sub>rId\<times>\<^sub>rId\<rangle>list_rel \<rightarrow> \<langle>Id\<rangle>list_rel" by simp
+lemma [sepref_import_param]: "(sort_edges,sort_edges)\<in>\<langle>Id\<times>\<^sub>rId\<times>\<^sub>rId\<rangle>list_rel \<rightarrow>\<langle>Id\<times>\<^sub>rId\<times>\<^sub>rId\<rangle>list_rel" by simp
+
+sepref_definition kruskal6 is
+  "kruskal5" :: "(list_assn (nat_assn\<times>\<^sub>anat_assn\<times>\<^sub>anat_assn))\<^sup>k \<rightarrow>\<^sub>a list_assn (nat_assn \<times>\<^sub>a nat_assn \<times>\<^sub>a nat_assn)"
+  unfolding kruskal5_def sort_edges_def[symmetric]
+  apply (rewrite at "nfoldli _ _ _ (_,\<hole>)" HOL_list.fold_custom_empty)
+  by sepref
+
+export_code kruskal6 checking SML_imp
+export_code kruskal6 in SML_imp module_name Kruskal
+
+
+context Kruskal_nat begin
+
+  thm kruskal1_spanning_tree
+  thm kruskal2_refine[OF l_G_refine]
+  thm kruskal3_refine[OF l_G_refine]
+  thm kruskal4_refine
+  thm kruskal5.refine[OF Kruskal_nat_axioms]
+  thm kruskal6.refine
+
+  lemmas kruskal5_ref_spec = kruskal4_refine[
+    unfolded kruskal5.refine[OF Kruskal_nat_axioms],
+    FCOMP kruskal3_refine[OF l_G_refine],
+    FCOMP kruskal2_refine[OF l_G_refine],
+    FCOMP kruskal1_spanning_tree
+    ]
+
+  lemma kruskal6_refine': "(uncurry0 (kruskal6 l), uncurry0 (kruskal5 l))
+    \<in> unit_assn\<^sup>k \<rightarrow>\<^sub>a list_assn (nat_assn \<times>\<^sub>a nat_assn \<times>\<^sub>a nat_assn)"
+    using kruskal6.refine
+    unfolding list_assn_pure_conv prod_assn_pure_conv
+    unfolding hfref_def hn_refine_def pure_def hn_ctxt_def
+    by auto
+
+  lemma [fcomp_norm_simps]: "list_assn (nat_assn \<times>\<^sub>a nat_assn \<times>\<^sub>a nat_assn) = id_assn"
+    by (auto simp: list_assn_pure_conv)
+
+  lemmas kruskal6_ref_spec = kruskal6_refine'[FCOMP kruskal5_ref_spec]
+end
+
+lemma
+  fixes l
+  assumes "lst_graph_invar l"
+  defines "G \<equiv> graph_of_list l"
+  assumes "Kruskal G"
+  assumes "nodes G = {0..<N}"
+  shows "<emp> kruskal6 l <\<lambda>r. \<up>(lst_graph_invar r \<and> weighted_graph.is_minimum_spanning_tree G (subgraph_of_lst G r))>\<^sub>t"
+proof -
+  interpret Kruskal "graph_of_list l" using assms unfolding G_def by simp
+  interpret Kruskal_nat l apply unfold_locales
+    using assms by (auto simp: lst_graph_invar_def)
+
+  show ?thesis
+    using kruskal6_ref_spec[to_hnr]
+    unfolding hn_refine_def lst_subgraph_rel_def
+    apply clarsimp
+    apply (sep_auto simp: hn_ctxt_def pure_def)
+
+
+term lst_subgraph_rel
+end
+
+context
+  fixes l :: "(nat\<times>nat\<times>nat) list" and G
+  assumes LG: "(l,G)\<in>lst_graph_rel"
+  assumes K: "Kruskal G"
+begin
+  lemma 1: "G = graph_of_list l" "distinct l"
+    using LG unfolding lst_graph_rel_def lst_graph_invar_def
+    by (auto simp: in_br_conv)
+
+  interpretation Kruskal "(graph_of_list l)"
+    using K[unfolded 1] .
+  interpretation Kruskal_nat l
+    apply unfold_locales using 1
+
+
+  lemma "(kruskal5, (\<lambda>G. SPEC (weighted_graph.is_minimum_spanning_tree G)))
+    \<in> [\<lambda>G'. G'=G]\<^sub>f lst_graph_rel \<rightarrow> \<langle>lst_subgraph_rel G\<rangle>nres_rel"
+
+thm Kruskal_nat.kruskal5_ref_spec
+
+
+
+
+term Kruskal.kruskal1
+
+lemma "(kruskal6,)"
+
+
+
+
+
+
+term kruskal6
+
+ML_val \<open>
+  val export_nat = @{code integer_of_nat}
+  val import_nat = @{code nat_of_integer}
+  val import_list = map (fn (a,b,c) => (import_nat a, (import_nat b, import_nat c)))
+  val export_list = map (fn (a,(b,c)) => (export_nat a, export_nat b, export_nat c))
+
+  fun kruskal l = @{code kruskal6} (import_list l) () |> export_list
+
+  val result = kruskal [(0,1,1),(1,2,2),(2,1,0)]
+
+
+\<close>
+
+
+  oops (* apply sepref *)
+
+
+thm Kruskal_nat.kruskal4_def
+
 
 sepref_thm kruskal is
   "uncurry0 kruskal4" :: "unit_assn\<^sup>k \<rightarrow>\<^sub>a id_assn"

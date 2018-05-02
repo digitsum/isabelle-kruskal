@@ -54,7 +54,7 @@ begin
   definition edge_weight :: "'w" where
     "edge_weight \<equiv> sum (fst o snd) E"
 
-  definition edges_less_eq :: "('a \<times> 'w \<times> 'a) \<Rightarrow> ('a \<times> 'w \<times> 'a) \<Rightarrow> bool"
+  definition (in -) edges_less_eq :: "('a \<times> 'w::weight \<times> 'a) \<Rightarrow> ('a \<times> 'w \<times> 'a) \<Rightarrow> bool"
     where "edges_less_eq a b \<equiv> fst(snd a) \<le> fst(snd b)"
 
   definition is_optimal_tree :: "('v, 'w) graph \<Rightarrow> bool" where
@@ -68,7 +68,7 @@ end
 
 section \<open> Helping lemmas \<close>
 
-lemma nodes_delete_edge[simp]: 
+lemma nodes_delete_edge[simp]:
   "nodes (delete_edge v e v' G) = nodes G"
   by (simp add: delete_edge_def)
 
@@ -88,7 +88,7 @@ begin
     "is_path_undir v [] v \<longleftrightarrow> v\<in>V"
     "is_path_undir v [(v,w,v')] v' \<longleftrightarrow> (v,w,v')\<in>E \<or> (v',w,v)\<in>E"
     by (auto dest: E_validD)
-  
+
   lemma is_path_undir_memb[simp]:
     "is_path_undir v p v' \<Longrightarrow> v\<in>V \<and> v'\<in>V"
     apply (induct p arbitrary: v)
@@ -105,8 +105,8 @@ begin
     "is_path_undir v (p1@p2) v' \<longleftrightarrow> (\<exists>u. is_path_undir v p1 u \<and> is_path_undir u p2 v')"
     by (induct p1 arbitrary: v) auto
 
-  lemma is_path_undir_split'[simp]: 
-    "is_path_undir v (p1@(u,w,u')#p2) v' 
+  lemma is_path_undir_split'[simp]:
+    "is_path_undir v (p1@(u,w,u')#p2) v'
       \<longleftrightarrow> is_path_undir v p1 u \<and> ((u,w,u')\<in>E \<or> (u',w,u)\<in>E) \<and> is_path_undir u' p2 v'"
     by (auto simp add: is_path_undir_split)
 
@@ -138,7 +138,7 @@ begin
     assumes "(a, w, b) \<in> set p \<or> (b, w, a) \<in> set p"
     shows "(\<exists>p' p'' u u'.
             is_path_undir v p' u \<and> is_path_undir u' p'' v' \<and>
-            length p' < length p \<and> length p'' < length p \<and> 
+            length p' < length p \<and> length p'' < length p \<and>
             (u \<in> {a, b} \<and> u' \<in> {a, b}) \<and>
             (a, w, b) \<notin> set p' \<and> (b, w, a) \<notin> set p' \<and>
             (a, w, b) \<notin> set p'' \<and> (b, w, a) \<notin> set p'')"
@@ -156,7 +156,7 @@ begin
       by auto
     from 1 len_p' p' have "(a, w, b) \<in> set p' \<or> (b, w, a) \<in> set p' \<longrightarrow> (\<exists>p'' p''' u' u''.
             is_path_undir v p'' u' \<and> is_path_undir u'' p''' u \<and>
-            length p'' < length p' \<and> length p''' < length p' \<and> 
+            length p'' < length p' \<and> length p''' < length p' \<and>
             (u' \<in> {a, b} \<and> u'' \<in> {a, b}) \<and>
             (a, w, b) \<notin> set p'' \<and> (b, w, a) \<notin> set p'' \<and>
             (a, w, b) \<notin> set p''' \<and> (b, w, a) \<notin> set p''')"
@@ -166,7 +166,7 @@ begin
       by fastforce
     from 1 len_p'' p'' have "(a, w, b) \<in> set p'' \<or> (b, w, a) \<in> set p'' \<longrightarrow> (\<exists>p' p''' u u''.
             is_path_undir u' p' u \<and> is_path_undir u'' p''' v' \<and>
-            length p' < length p'' \<and> length p''' < length p'' \<and> 
+            length p' < length p'' \<and> length p''' < length p'' \<and>
             (u \<in> {a, b} \<and> u'' \<in> {a, b}) \<and>
             (a, w, b) \<notin> set p' \<and> (b, w, a) \<notin> set p' \<and>
             (a, w, b) \<notin> set p''' \<and> (b, w, a) \<notin> set p''')"
@@ -242,7 +242,7 @@ begin
       unfolding subgraph_def
       by auto
   qed
-  
+
   lemma add_delete_edge:
     assumes "(a, w, c) \<in> E"
     shows "add_edge a w c (delete_edge a w c G) = G"
@@ -488,7 +488,7 @@ begin
     qed
     with valid assms show ?thesis
       unfolding connected_graph_def connected_graph_axioms_def
-      by auto 
+      by auto
   qed
 
   lemma delete_edge_connected:
@@ -511,7 +511,7 @@ begin
         case False
         with p is_path_undir_split_distinct[OF p, of a w b] obtain p' p'' u u'
           where "is_path_undir v p' u \<and> is_path_undir u' p'' v'" and
-            u: "(u \<in> {a, b} \<and> u' \<in> {a, b})" and 
+            u: "(u \<in> {a, b} \<and> u' \<in> {a, b})" and
             "(a, w, b) \<notin> set p' \<and> (b, w, a) \<notin> set p' \<and>
             (a, w, b) \<notin> set p'' \<and> (b, w, a) \<notin> set p''"
           by auto
@@ -532,7 +532,7 @@ begin
     qed
     with valid assms show ?thesis
       unfolding connected_graph_def connected_graph_axioms_def
-      by auto 
+      by auto
   qed
 
 end
