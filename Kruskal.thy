@@ -659,29 +659,9 @@ theorem kruskal3_refine: "(kruskal3, kruskal2)\<in>\<langle>lst_subgraph_rel G\<
 end
 end
 
-term "\<exists>N. nodes (graph_of_list l) = {i. i<N}"
-
 locale Kruskal_nat = Kruskal "graph_of_list l" for
-  l :: "(nat \<times> nat \<times> nat) list"
-  (*assumes distinct: "distinct l"*)
-  (*
-  assumes nat_nodes: "N = card (fst`set l \<union> (snd o snd)`set l) \<Longrightarrow> fst`set l \<union> (snd o snd)`set l = {i. i<N}"
-  *)
-  (*assumes nat_nodes': "\<exists>N. nodes (graph_of_list l) = {i. i<N}"*)
+  l :: "(nat \<times> int \<times> nat) list"
 begin
-
-
-(*
-locale Kruskal_nat =
-  fixes l :: "(nat \<times> nat \<times> nat) list"
-  assumes distinct: "distinct l"
-  assumes Kruskal_G: "Kruskal \<lparr>nodes = fst`set l \<union> (snd o snd)`set l, edges = set l \<rparr>"
-  assumes nat_nodes: "N = card (fst`set l \<union> (snd o snd)`set l) \<Longrightarrow> fst`set l \<union> (snd o snd)`set l = {i. i<N}"
-begin
-
-sublocale Kruskal "\<lparr>nodes = fst`set l \<union> (snd o snd)`set l, edges = set l \<rparr>"
-  using Kruskal_G .
-*)
 
 abbreviation "G\<equiv>graph_of_list l"
 
@@ -707,7 +687,7 @@ lemma l_G_refine: "(l, G) \<in> lst_graph_rel"
   unfolding lst_graph_rel_def
   by (auto simp: in_br_conv)
 
-definition kruskal4 :: "(nat \<times> nat \<times> nat) list nres"
+definition kruskal4 :: "(nat \<times> int \<times> nat) list nres"
   where "kruskal4 \<equiv> do {
     let initial_union_find = per_init' (N l);
     (per, spanning_forest) \<leftarrow> nfoldli (quicksort_by_rel edges_less_eq [] l) (\<lambda>_. True)
@@ -766,7 +746,7 @@ lemma [sepref_import_param]: "(sort_edges,sort_edges)\<in>\<langle>Id\<times>\<^
 lemma [sepref_import_param]: "(N, N) \<in> \<langle>Id\<times>\<^sub>rId\<times>\<^sub>rId\<rangle>list_rel \<rightarrow> nat_rel" by simp
 
 sepref_definition kruskal6 is
-  "kruskal5" :: "(list_assn (nat_assn\<times>\<^sub>anat_assn\<times>\<^sub>anat_assn))\<^sup>k \<rightarrow>\<^sub>a list_assn (nat_assn \<times>\<^sub>a nat_assn \<times>\<^sub>a nat_assn)"
+  "kruskal5" :: "(list_assn (nat_assn\<times>\<^sub>aint_assn\<times>\<^sub>anat_assn))\<^sup>k \<rightarrow>\<^sub>a list_assn (nat_assn \<times>\<^sub>a int_assn \<times>\<^sub>a nat_assn)"
   unfolding kruskal5_def sort_edges_def[symmetric]
   apply (rewrite at "nfoldli _ _ _ (_,\<hole>)" HOL_list.fold_custom_empty)
   by sepref
@@ -780,13 +760,13 @@ context Kruskal_nat begin
     ]
 
   lemma kruskal6_refine: "(uncurry0 (kruskal6 l), uncurry0 (kruskal5 l))
-    \<in> unit_assn\<^sup>k \<rightarrow>\<^sub>a list_assn (nat_assn \<times>\<^sub>a nat_assn \<times>\<^sub>a nat_assn)"
+    \<in> unit_assn\<^sup>k \<rightarrow>\<^sub>a list_assn (nat_assn \<times>\<^sub>a int_assn \<times>\<^sub>a nat_assn)"
     using kruskal6.refine
     unfolding list_assn_pure_conv prod_assn_pure_conv
     unfolding hfref_def hn_refine_def pure_def hn_ctxt_def
     by auto
 
-  lemma [fcomp_norm_simps]: "list_assn (nat_assn \<times>\<^sub>a nat_assn \<times>\<^sub>a nat_assn) = id_assn"
+  lemma [fcomp_norm_simps]: "list_assn (nat_assn \<times>\<^sub>a int_assn \<times>\<^sub>a nat_assn) = id_assn"
     by (auto simp: list_assn_pure_conv)
 
   lemmas kruskal6_ref_spec = kruskal6_refine[FCOMP kruskal5_ref_spec]
@@ -836,12 +816,14 @@ export_code kruskal6 in SML_imp module_name Kruskal (*file "Kruskal.sml"*)
 ML_val \<open>
   val export_nat = @{code integer_of_nat}
   val import_nat = @{code nat_of_integer}
-  val import_list = map (fn (a,b,c) => (import_nat a, (import_nat b, import_nat c)))
-  val export_list = map (fn (a,(b,c)) => (export_nat a, export_nat b, export_nat c))
+  val export_int = @{code integer_of_int}
+  val import_int = @{code int_of_integer}
+  val import_list = map (fn (a,b,c) => (import_nat a, (import_int b, import_nat c)))
+  val export_list = map (fn (a,(b,c)) => (export_nat a, export_int b, export_nat c))
 
   fun kruskal l = @{code kruskal6} (import_list l) () |> export_list
 
-  val result = kruskal [(1,9,2),(4,3,3)]
+  val result = kruskal [(1,~9,2),(2,~3,3),(3,~4,1)]
 
 
 \<close>
