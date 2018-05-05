@@ -42,7 +42,8 @@ definition edges_less_eq :: "('a \<times> 'w::weight \<times> 'a) \<Rightarrow> 
   where "edges_less_eq a b \<equiv> fst(snd a) \<le> fst(snd b)"
 
 definition maximal_connected :: "('v, 'w) graph \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool" where
-  "maximal_connected H G \<equiv> \<forall>v\<in>nodes G. \<forall>v'\<in>nodes G. (\<exists>p. valid_graph.is_path_undir G v p v') \<longleftrightarrow> (\<exists>p. valid_graph.is_path_undir H v p v')"
+  "maximal_connected H G \<equiv> \<forall>v\<in>nodes G. \<forall>v'\<in>nodes G.
+    (\<exists>p. valid_graph.is_path_undir G v p v') \<longrightarrow> (\<exists>p. valid_graph.is_path_undir H v p v')"
 
 definition is_spanning_forest :: "('v, 'w) graph \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool" where
   "is_spanning_forest F G \<equiv> forest F \<and> maximal_connected F G \<and> subgraph F G"
@@ -309,7 +310,7 @@ begin
   proof -
     from valid_subgraph[OF \<open>subgraph H G\<close> valid_graph_axioms]
     have valid_H: "valid_graph H" .
-    have "(\<exists>p. is_path_undir v p v') \<longleftrightarrow> (\<exists>p. valid_graph.is_path_undir H v p v')" (is "?lhs \<longleftrightarrow> ?rhs")
+    have "(\<exists>p. is_path_undir v p v') \<longrightarrow> (\<exists>p. valid_graph.is_path_undir H v p v')" (is "?lhs \<longrightarrow> ?rhs")
       if v: "v\<in>V" and v': "v'\<in>V" for v v'
     proof
       assume ?lhs
@@ -338,10 +339,6 @@ begin
           then show ?thesis ..
         qed
       qed
-    next
-      assume ?rhs
-      with is_path_undir_subgraph assms(1) show ?lhs
-        by blast
     qed
     with assms show ?thesis
       unfolding maximal_connected_def
@@ -376,11 +373,12 @@ begin
         have "a \<in> V" "b \<in> V"
           unfolding is_spanning_forest_def subgraph_def
           by auto
-        from \<open>is_spanning_forest T G\<close> valid_graph.is_path_undir_simps(2)[OF valid_T]
-          \<open>a\<in>V\<close> \<open>b\<in>V\<close> asm x
+        from \<open>is_spanning_forest T G\<close> is_path_undir_subgraph
+          valid_graph.is_path_undir_simps(2)[OF valid_T]
+          asm x
         have "\<exists>p. is_path_undir a p b"
-          unfolding is_spanning_forest_def maximal_connected_def
-          by auto
+          unfolding is_spanning_forest_def
+          by blast
         with \<open>is_spanning_forest H G\<close> \<open>a\<in>V\<close> \<open>b\<in>V\<close>
         obtain p where p:"valid_graph.is_path_undir H a p b"
           unfolding is_spanning_forest_def maximal_connected_def
@@ -402,7 +400,7 @@ begin
     assumes "(a, w, b) \<in> E"
     shows "maximal_connected (add_edge a w b H) G"
   proof -
-    have "(\<exists>p. is_path_undir v p v') \<longleftrightarrow> (\<exists>p. valid_graph.is_path_undir (add_edge a w b H) v p v')" (is "?lhs \<longleftrightarrow> ?rhs")
+    have "(\<exists>p. is_path_undir v p v') \<longrightarrow> (\<exists>p. valid_graph.is_path_undir (add_edge a w b H) v p v')" (is "?lhs \<longrightarrow> ?rhs")
       if vv': "v \<in> V" "v' \<in> V" for v v'
     proof
       assume ?lhs
@@ -411,12 +409,6 @@ begin
         by auto
       with valid_graph.add_edge_is_path[OF valid_subgraph[OF \<open>subgraph H G\<close> valid_graph_axioms] this] show ?rhs
         by auto
-    next
-      assume ?rhs
-      from add_edge_preserve_subgraph[OF \<open>subgraph H G\<close> \<open>(a, w, b)\<in>E\<close>]
-      have "subgraph (add_edge a w b H) G" .
-      with \<open>?rhs\<close> is_path_undir_subgraph show ?lhs
-        by blast
     qed
     then show ?thesis
       unfolding maximal_connected_def
