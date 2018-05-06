@@ -5,6 +5,17 @@ theory Kruskal
     Refine_Imperative_HOL.IICF
 begin
 
+definition valid_union_find_graph :: "('v, 'w) graph \<Rightarrow> 'v per \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool"
+  where "valid_union_find_graph G uf H \<equiv> (\<forall>a\<in>nodes G. \<forall>b\<in>nodes G.
+      (\<exists>p. is_path_undir H a p b) \<longleftrightarrow> (a,b) \<in> uf)"
+
+definition "uf_graph_invar G uf_H \<equiv> case uf_H of (uf, H) \<Rightarrow>
+    part_equiv uf \<and>
+    valid_union_find_graph G uf H \<and>
+    Domain uf = nodes G"
+
+definition "uf_graph_rel G \<equiv> br snd (uf_graph_invar G)"
+
 definition "graph_of_list l \<equiv> \<lparr>
   nodes = fst`set l \<union> (snd o snd)`set l,
   edges = set l \<rparr>"
@@ -44,7 +55,7 @@ definition empty_forest :: "('v, 'w) graph"
   where "empty_forest \<equiv> \<lparr> nodes = V, edges = {} \<rparr>"
 
 definition previous_edges_connected :: "('v, 'w) graph \<Rightarrow> ('v \<times> 'w \<times> 'v) set \<Rightarrow> bool"
-  where "previous_edges_connected H E' \<equiv> (\<forall>(a, w, b)\<in>E - E'. \<exists>p. valid_graph.is_path_undir H a p b)"
+  where "previous_edges_connected H E' \<equiv> (\<forall>(a, w, b)\<in>E - E'. \<exists>p. is_path_undir H a p b)"
 
 definition exists_min_spanning_forest :: "('v, 'w) graph \<Rightarrow> bool"
   where "exists_min_spanning_forest H \<equiv> (\<exists>T. subgraph H T \<and> is_minimum_spanning_forest T G)"
@@ -64,7 +75,7 @@ definition kruskal0 :: "('v, 'w) graph nres"
       (\<lambda>(a, w, b) H. do {
         ASSERT (subgraph H G);
         ASSERT (a\<in>V \<and> b\<in>V);
-        if (\<exists>p. valid_graph.is_path_undir H a p b)
+        if (\<exists>p. is_path_undir H a p b)
         then
           RETURN H
         else do {
@@ -114,20 +125,20 @@ lemma loop_invar_kruskal_subgraph:
 lemma loop_invar_kruskal_edge_not_in_graph:
   assumes invar: "loop_invar_kruskal (insert (a, w, b) E') H"
   assumes "(a, w, b) \<in> E"
-  assumes "\<nexists>p. valid_graph.is_path_undir H a p b"
+  assumes "\<nexists>p. is_path_undir H a p b"
   shows "(a, w, b) \<notin> edges H"
 proof -
-  from assms have "\<not> valid_graph.is_path_undir H a [(a, w, b)] b"
-    by simp
+  from assms have "\<not> is_path_undir H a [(a, w, b)] b"
+    by blast
   with \<open>(a, w, b)\<in>E\<close> valid_graph.is_path_undir_simps(2)[OF
-      valid_subgraph[OF loop_invar_kruskal_subgraph[OF invar] valid_graph_axioms]]
+      valid_subgraph[OF loop_invar_kruskal_subgraph[OF invar]]]
   show ?thesis
     by auto
 qed
 
 lemma preserve_previous_edges_connected_no_add:
   assumes "previous_edges_connected H (insert (a, w, b) E')"
-  assumes "\<exists>p. valid_graph.is_path_undir H a p b"
+  assumes "\<exists>p. is_path_undir H a p b"
   shows "previous_edges_connected H E'"
   using assms
   unfolding previous_edges_connected_def
@@ -139,11 +150,11 @@ lemma preserve_previous_edges_connected_add:
   shows "previous_edges_connected (add_edge a w b H) E'"
   using assms
 proof -
-  have "\<exists>p. valid_graph.is_path_undir (add_edge a w b H) v p v'"
+  have "\<exists>p. is_path_undir (add_edge a w b H) v p v'"
     if e: "(v, w', v')\<in>E - E'" for v w' v'
   proof (cases "(v, w', v') = (a, w, b)")
     case True
-    with add_edge_is_connected[OF \<open>valid_graph H\<close>] show ?thesis
+    with valid_graph.add_edge_is_connected[OF \<open>valid_graph H\<close>] show ?thesis
       by simp
   next
     case False
@@ -162,7 +173,7 @@ lemma exists_min_spanning_forest_add:
   assumes "previous_edges_connected H (insert (a, w, b) (set l2))"
   assumes "subgraph H G"
   assumes "(a,w,b) \<in> E"
-  assumes "\<nexists>p. valid_graph.is_path_undir H a p b"
+  assumes "\<nexists>p. is_path_undir H a p b"
   assumes "sorted_by_rel edges_less_eq (l1 @ (a, w, b) # l2)"
   shows "exists_min_spanning_forest (add_edge a w b H)"
 proof -
@@ -179,7 +190,7 @@ proof -
   from subgraph_node[OF subgraph_T] E_validD[OF \<open>(a,w,b)\<in>E\<close>]
     have ab: "a\<in>nodes T" "b\<in>nodes T"
     by auto
-  from valid_subgraph[OF \<open>subgraph H G\<close> valid_graph_axioms]
+  from valid_subgraph[OF \<open>subgraph H G\<close>]
   have valid_H: "valid_graph H"
     unfolding forest_def
     by simp
@@ -195,13 +206,13 @@ proof -
   next
     case False
     from maximal_connected_T \<open>(a,w,b)\<in>E\<close> is_path_undir_simps(2)[of a w b]
-    obtain p where p: "valid_graph.is_path_undir T a p b"
+    obtain p where p: "is_path_undir T a p b"
       unfolding maximal_connected_def
       by (meson E_validD)
-    from forest.delete_edge_from_path[OF forest_T p subgraph_H_T \<open>\<nexists>p. valid_graph.is_path_undir H a p b\<close>]
+    from forest.delete_edge_from_path[OF forest_T p subgraph_H_T \<open>\<nexists>p. is_path_undir H a p b\<close>]
     obtain x w' y where xy: "(x, w', y) \<in> edges T" "(x, w', y) \<notin> edges H" and
-      not_connected: "\<forall>p. \<not> valid_graph.is_path_undir (delete_edge x w' y T) a p b" and
-      connected_xy: "\<exists>p. valid_graph.is_path_undir (add_edge a w b (delete_edge x w' y T)) x p y"
+      not_connected: "\<forall>p. \<not> is_path_undir (delete_edge x w' y T) a p b" and
+      connected_xy: "\<exists>p. is_path_undir (add_edge a w b (delete_edge x w' y T)) x p y"
       by blast
     obtain T' where T': "T' = add_edge a w b (delete_edge x w' y T)"
       by blast
@@ -211,7 +222,7 @@ proof -
       by simp
     from False have False': "(a, w, b) \<notin> edges (delete_edge x w' y T)"
       unfolding delete_edge_def by simp
-    from forest_delete_edge[OF forest_T]
+    from forest.forest_delete_edge[OF forest_T]
     have forest_delete_T: "forest (delete_edge x w' y T)"
       by simp
     from False xy(1) have ab_neq_xy: "(x, w', y) \<noteq> (a, w, b)"
@@ -222,13 +233,13 @@ proof -
     from subgraph_H_T xy have subgraph_H_delete_T: "subgraph H (delete_edge x w' y T)"
       unfolding subgraph_def delete_edge_def
       by auto
-    have "\<forall>p. \<not> valid_graph.is_path_undir H x p y"
+    have "\<forall>p. \<not> is_path_undir H x p y"
     proof (rule ccontr)
-      assume "\<not> (\<forall>p. \<not> valid_graph.is_path_undir H x p y)"
-      then obtain p where p: "valid_graph.is_path_undir H x p y"
+      assume "\<not> (\<forall>p. \<not> is_path_undir H x p y)"
+      then obtain p where p: "is_path_undir H x p y"
         by auto
       from forest.cycle_free[OF forest_T] xy(1)
-        have contr: "\<forall>p. \<not> valid_graph.is_path_undir (delete_edge x w' y T) x p y"
+        have contr: "\<forall>p. \<not> is_path_undir (delete_edge x w' y T) x p y"
         by auto
       with valid_graph.is_path_undir_subgraph[OF valid_delete_T p subgraph_H_delete_T]
       show False by simp
@@ -255,7 +266,7 @@ proof -
     from T' subgraph_H_delete_T have "subgraph (add_edge a w b H) T'"
       unfolding subgraph_def
       by auto
-    moreover from T' ab forest_add_edge[OF forest_delete_T _ _ not_connected]
+    moreover from T' ab forest.forest_add_edge[OF forest_delete_T _ _ not_connected]
       have "forest T'"
         by simp
     moreover from connected_xy T' swap_delete_add_edge[OF ab_neq_xy, of T]
@@ -276,17 +287,17 @@ qed
 
 lemma union_preserves_forest:
   assumes "forest H"
-  assumes "\<nexists>p. valid_graph.is_path_undir H a p b"
+  assumes "\<nexists>p. is_path_undir H a p b"
   assumes "subgraph H G"
   assumes "a \<in> V"
   assumes "b \<in> V"
   shows "forest (add_edge a w b H)"
-  using assms forest_add_edge[of H] subgraph_node
+  using assms forest.forest_add_edge[of H] subgraph_node
   by fast
 
 lemma union_preserves_loop_invar:
   assumes "loop_invar_kruskal (insert (a, w, b) (set l2)) H"
-  assumes "\<nexists>p. valid_graph.is_path_undir H a p b"
+  assumes "\<nexists>p. is_path_undir H a p b"
   assumes "insert (a, w, b) (set l1 \<union> set l2) = E"
   assumes "sorted_by_rel edges_less_eq (l1 @ (a, w, b) # l2)"
   shows "loop_invar_kruskal (set l2) (add_edge a w b H)"
@@ -294,14 +305,13 @@ lemma union_preserves_loop_invar:
   unfolding loop_invar_kruskal_def
   apply (auto simp: add_edge_preserve_subgraph)
   apply (meson E_validD union_preserves_forest)
-  apply (auto simp: valid_subgraph[OF _ valid_graph_axioms]
-                    E_validD exists_min_spanning_forest_add
+  apply (auto simp: valid_subgraph E_validD exists_min_spanning_forest_add
           dest: preserve_previous_edges_connected_add)
   done
 
 lemma same_component_preserves_loop_invar:
   assumes "loop_invar_kruskal (insert (a, w, b) E') H"
-  assumes "\<exists>p. valid_graph.is_path_undir H a p b"
+  assumes "\<exists>p. is_path_undir H a p b"
   shows "loop_invar_kruskal E' H"
   using assms preserve_previous_edges_connected_no_add
   unfolding loop_invar_kruskal_def
@@ -343,10 +353,6 @@ theorem kruskal0_refine: "(kruskal0, SPEC (\<lambda>F. is_minimum_spanning_fores
 
 section \<open>Kruskal 1\<close>
 
-definition valid_union_find_graph :: "'v per \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool"
-  where "valid_union_find_graph uf H \<equiv> (\<forall>a\<in>V. \<forall>b\<in>V.
-      (\<exists>p. valid_graph.is_path_undir H a p b) \<longleftrightarrow> (a,b) \<in> uf)"
-
 definition kruskal1 :: "('v, 'w) graph nres"
   where "kruskal1 \<equiv> do {
     let initial_union_find = per_init V;
@@ -368,104 +374,74 @@ definition kruskal1 :: "('v, 'w) graph nres"
     RETURN spanning_forest
   }"
 
-definition "uf_graph_invar uf_H \<equiv> case uf_H of (uf, H) \<Rightarrow>
-    part_equiv uf \<and>
-    valid_union_find_graph uf H \<and>
-    Domain uf = V"
-
-definition "uf_graph_rel \<equiv> br snd uf_graph_invar"
-
-definition "kruskal0_loop l H \<equiv> nfoldli l (\<lambda>_. True)
-      (\<lambda>(a, w, b) H. do {
-        ASSERT (subgraph H G);
-        ASSERT (a\<in>V \<and> b\<in>V);
-        if (\<exists>p. valid_graph.is_path_undir H a p b)
-        then
-          RETURN H
-        else do {
-          ASSERT ((a, w, b) \<in> E - edges H);
-          RETURN (add_edge a w b H)
-        }
-      }) H"
-
-definition "kruskal1_loop l uf_H \<equiv> nfoldli l (\<lambda>_. True)
-      (\<lambda>(a, w, b) (uf, H). do {
-        ASSERT (subgraph H G);
-        ASSERT (a\<in>Domain uf \<and> b\<in>Domain uf);
-        if per_compare uf a b
-        then
-          RETURN (uf, H)
-        else do {
-          let uf = per_union uf a b;
-          ASSERT ((a, w, b) \<in> E - edges H);
-          RETURN (uf, add_edge a w b H)
-        }
-      }) uf_H"
-
 lemma preserve_valid_union_find_graph_add:
-  assumes "valid_union_find_graph uf H"
-  assumes UF'_def: "uf' = per_union uf a b"
+  assumes "valid_union_find_graph G uf H"
   assumes "a \<in> V"
   assumes "b \<in> V"
   assumes "Domain uf = V"
   assumes "subgraph H G"
   assumes PER: "part_equiv uf"
-  shows "valid_union_find_graph uf' (add_edge a w b H)"
+  shows "valid_union_find_graph G (per_union uf a b) (add_edge a w b H)"
 proof -
-  from valid_subgraph[OF assms(6) valid_graph_axioms]
-  have valid_H: "valid_graph H" .  
-  have "(\<exists>p. valid_graph.is_path_undir (add_edge a w b H) x p y) \<longleftrightarrow> (x,y) \<in> uf'"
+  from valid_subgraph[OF \<open>subgraph H G\<close>]
+  have valid_H: "valid_graph H" .
+  have "(\<exists>p. is_path_undir (add_edge a w b H) x p y) \<longleftrightarrow> (x,y) \<in> per_union uf a b"
     if xy: "x\<in>V \<and> y\<in>V" for x y
   proof
-    assume "\<exists>p. valid_graph.is_path_undir (add_edge a w b H) x p y"
-    then obtain p where p: "valid_graph.is_path_undir (add_edge a w b H) x p y"
+    assume "\<exists>p. is_path_undir (add_edge a w b H) x p y"
+    then obtain p where p: "is_path_undir (add_edge a w b H) x p y"
       by blast
-    from \<open>a\<in>V\<close> \<open>b\<in>V\<close> \<open>Domain uf = V\<close> have [simp]: "a\<in>Domain uf'" "b\<in>Domain uf'"
-      by (auto simp: UF'_def)
-    from PER have PER': "part_equiv uf'"
-      by (auto simp: UF'_def union_part_equivp)
-    show "(x,y) \<in> uf'"
+    from \<open>a\<in>V\<close> \<open>b\<in>V\<close> \<open>Domain uf = V\<close>
+    have [simp]: "a\<in>Domain (per_union uf a b)" "b\<in>Domain (per_union uf a b)"
+      by auto
+    from PER have PER': "part_equiv (per_union uf a b)"
+      by (auto simp: union_part_equivp)
+    show "(x,y) \<in> per_union uf a b"
     proof (cases "(a, w, b) \<in> set p \<or> (b, w, a) \<in> set p")
       case True
       from valid_graph.is_path_undir_split_distinct[OF add_edge_valid[OF valid_H] p True]
       obtain p' p'' u u' where
-        "valid_graph.is_path_undir (add_edge a w b H) x p' u \<and>
-        valid_graph.is_path_undir (add_edge a w b H) u' p'' y" and
+        "is_path_undir (add_edge a w b H) x p' u \<and>
+        is_path_undir (add_edge a w b H) u' p'' y" and
         u: "u\<in>{a,b} \<and> u'\<in>{a,b}" and
         "(a, w, b) \<notin> set p' \<and> (b, w, a) \<notin> set p' \<and>
         (a, w, b) \<notin> set p'' \<and> (b, w, a) \<notin> set p''"
         by auto
-      with assms(3-6) valid_graph.add_edge_was_path[OF valid_H]
-      have "valid_graph.is_path_undir H x p' u \<and> valid_graph.is_path_undir H u' p'' y"
+      with \<open>a\<in>V\<close> \<open>b\<in>V\<close> \<open>Domain uf = V\<close> \<open>subgraph H G\<close>
+        valid_graph.add_edge_was_path[OF valid_H]
+      have "is_path_undir H x p' u \<and> is_path_undir H u' p'' y"
         unfolding subgraph_def by auto
       with assms(1-5) xy u have comps: "(x,u) \<in> uf \<and> (u', y) \<in> uf"
         unfolding valid_union_find_graph_def
         by auto
-      have "(x,u)\<in>uf'" using comps per_union_impl UF'_def by auto
-      also from u assms(3-5) part_equiv_refl'[OF PER' \<open>a\<in>Domain uf'\<close>]
-        part_equiv_refl'[OF PER' \<open>b\<in>Domain uf'\<close>] part_equiv_sym[OF PER']
-        per_union_related[OF PER] UF'_def
-      have "(u,u') \<in> uf'"
+      from comps per_union_impl have "(x,u) \<in> per_union uf a b"
         by auto
-      also (part_equiv_trans[OF PER']) have "(u',y)\<in>uf'" using comps per_union_impl UF'_def by auto
+      also from u \<open>a\<in>V\<close> \<open>b\<in>V\<close> \<open>Domain uf = V\<close> part_equiv_refl'[OF PER' \<open>a\<in>Domain (per_union uf a b)\<close>]
+        part_equiv_refl'[OF PER' \<open>b\<in>Domain (per_union uf a b)\<close>] part_equiv_sym[OF PER']
+        per_union_related[OF PER]
+      have "(u,u') \<in> per_union uf a b"
+        by auto
+      also (part_equiv_trans[OF PER']) from comps per_union_impl
+      have "(u',y) \<in> per_union uf a b"
+        by auto
       finally (part_equiv_trans[OF PER']) show ?thesis by simp
     next
       case False
-      with assms(3-6) valid_graph.add_edge_was_path[OF valid_H p(1)]
-      have "valid_graph.is_path_undir H x p y"
+      with \<open>a\<in>V\<close> \<open>b\<in>V\<close> \<open>Domain uf = V\<close> \<open>subgraph H G\<close>
+        valid_graph.add_edge_was_path[OF valid_H p(1)]
+      have "is_path_undir H x p y"
         unfolding subgraph_def by auto
       with assms(1) xy have "(x,y)\<in>uf"
         unfolding valid_union_find_graph_def
         by auto
-      with per_union_impl UF'_def show ?thesis
-        by simp
+      from per_union_impl[OF this] show ?thesis .
     qed
   next
-    assume asm: "(x, y) \<in> uf'"
-    show "\<exists>p. valid_graph.is_path_undir (add_edge a w b H) x p y"
+    assume asm: "(x, y) \<in> per_union uf a b"
+    show "\<exists>p. is_path_undir (add_edge a w b H) x p y"
       proof (cases "(x, y) \<in> uf")
         case True
-        with assms(1) xy obtain p where "valid_graph.is_path_undir H x p y"
+        with assms(1) xy obtain p where "is_path_undir H x p y"
           unfolding valid_union_find_graph_def
           by blast
         with valid_graph.add_edge_is_path[OF valid_H this] show ?thesis
@@ -475,22 +451,22 @@ proof -
         with asm part_equiv_sym[OF PER]
         have "(x,a) \<in> uf \<and> (b,y) \<in> uf \<or>
               (b,x) \<in> uf \<and> (y,a) \<in> uf"
-          unfolding per_union_def UF'_def
+          unfolding per_union_def
           by auto
-        with assms(1-5) xy obtain p q
-          where "valid_graph.is_path_undir H x p a \<and> valid_graph.is_path_undir H b q y \<or>
-                 valid_graph.is_path_undir H b p x \<and> valid_graph.is_path_undir H y q a"
+        with assms(1) \<open>a\<in>V\<close> \<open>b\<in>V\<close> xy obtain p q
+          where "is_path_undir H x p a \<and> is_path_undir H b q y \<or>
+                 is_path_undir H b p x \<and> is_path_undir H y q a"
           unfolding valid_union_find_graph_def
           by blast
         with valid_graph.add_edge_is_path[OF valid_H] obtain p' q'
-          where "valid_graph.is_path_undir (add_edge a w b H) x p' a \<and>
-                valid_graph.is_path_undir (add_edge a w b H) b q' y \<or>
-                valid_graph.is_path_undir (add_edge a w b H) b p' x \<and>
-                valid_graph.is_path_undir (add_edge a w b H) y q' a"
+          where "is_path_undir (add_edge a w b H) x p' a \<and>
+                is_path_undir (add_edge a w b H) b q' y \<or>
+                is_path_undir (add_edge a w b H) b p' x \<and>
+                is_path_undir (add_edge a w b H) y q' a"
           by blast
         with valid_graph.is_path_undir_split'[OF add_edge_valid[OF valid_H]]
-        have "valid_graph.is_path_undir (add_edge a w b H) x (p' @ (a, w, b) # q') y \<or>
-              valid_graph.is_path_undir (add_edge a w b H) y (q' @ (a, w, b) # p') x"
+        have "is_path_undir (add_edge a w b H) x (p' @ (a, w, b) # q') y \<or>
+              is_path_undir (add_edge a w b H) y (q' @ (a, w, b) # p') x"
           by auto
         with valid_graph.is_path_undir_sym[OF add_edge_valid[OF valid_H]]
         show ?thesis
@@ -500,51 +476,46 @@ proof -
   then show ?thesis unfolding valid_union_find_graph_def by simp
 qed
 
-lemma kruskal1_refine_loop: "(kruskal1_loop, kruskal0_loop)\<in>\<langle>Id\<rangle>list_rel \<rightarrow> uf_graph_rel \<rightarrow> \<langle>uf_graph_rel\<rangle>nres_rel"
-  unfolding kruskal1_loop_def kruskal0_loop_def
-  apply (refine_rcg)
-  apply refine_dref_type
-  using preserve_valid_union_find_graph_add
-  unfolding uf_graph_rel_def uf_graph_invar_def valid_union_find_graph_def
-  apply (auto simp: in_br_conv union_part_equivp)
-  done
-
 lemma valid_union_find_graph_empty:
-  shows "valid_union_find_graph (per_init V) empty_forest"
+  shows "valid_union_find_graph G (per_init V) empty_forest"
 proof -
-  have "(\<exists>p. valid_graph.is_path_undir empty_forest a p b) \<longleftrightarrow> (a,b) \<in> per_init V"
+  have "(\<exists>p. is_path_undir empty_forest a p b) \<longleftrightarrow> (a,b) \<in> per_init V"
     if ab: "a\<in>V \<and> b\<in>V" for a b
   proof
-    assume "\<exists>p. valid_graph.is_path_undir empty_forest a p b"
-    then obtain p where p: "valid_graph.is_path_undir empty_forest a p b"
+    assume "\<exists>p. is_path_undir empty_forest a p b"
+    then obtain p where p: "is_path_undir empty_forest a p b"
       by blast
-    with valid_graph.is_path_undir.simps[OF empty_forest_valid] have "a = b"
+    then have "a = b"
       unfolding empty_forest_def
-      by (induction rule:valid_graph.is_path_undir.induct[OF empty_forest_valid]) auto
+      by (induction p) auto
     with ab show "(a,b) \<in> per_init V"
       by (auto intro: part_equiv_refl')
   next
     assume "(a,b) \<in> per_init V"
-    hence [simp]: "a=b" by (auto intro: per_init_self)
-    from valid_graph.is_path_undir.simps(1)[OF empty_forest_valid] ab
-      have "valid_graph.is_path_undir empty_forest a [] a"
+    hence "a=b" by (auto intro: per_init_self)
+    from ab have "is_path_undir empty_forest a [] a"
       unfolding empty_forest_def
       by auto
-    then show "\<exists>p. valid_graph.is_path_undir empty_forest a p b"
-      by auto
+    with \<open>a=b\<close> show "\<exists>p. is_path_undir empty_forest a p b"
+      by blast
   qed
   then show ?thesis
     unfolding valid_union_find_graph_def
     by simp
 qed
 
+lemma empty_forest_refine1: "((per_init V, empty_forest), empty_forest)\<in>uf_graph_rel G"
+  unfolding  uf_graph_rel_def uf_graph_invar_def
+  by (auto simp: in_br_conv valid_union_find_graph_empty)
+
 theorem kruskal1_refine: "(kruskal1, kruskal0)\<in>\<langle>Id\<rangle>nres_rel"
   unfolding kruskal1_def kruskal0_def
-  apply (fold kruskal1_loop_def kruskal0_loop_def)
   apply (rewrite at "let initial_union_find = per_init V in _" Let_def)
-  apply (refine_rcg kruskal1_refine_loop[param_fo, THEN nres_relD])
-  unfolding uf_graph_rel_def uf_graph_invar_def
-  apply (auto simp: in_br_conv valid_union_find_graph_empty)
+  apply (refine_rcg empty_forest_refine1)
+  apply refine_dref_type
+  using preserve_valid_union_find_graph_add
+  unfolding uf_graph_rel_def uf_graph_invar_def valid_union_find_graph_def
+  apply (auto simp: in_br_conv union_part_equivp)
   done
 
 end
@@ -624,30 +595,6 @@ definition kruskal3 :: "('v \<times> 'w \<times> 'v) list nres"
     RETURN spanning_forest
   }"
 
-definition "kruskal_loop_body2 a w b uf H \<equiv> do {
-        ASSERT (a\<in>Domain uf \<and> b\<in>Domain uf);
-        if per_compare uf a b
-        then
-          RETURN (uf, H)
-        else do {
-          let uf = per_union uf a b;
-          ASSERT ((a, w, b) \<in> E - edges H);
-          RETURN (uf, add_edge a w b H)
-        }
-      }"
-
-definition "kruskal_loop_body3 a w b uf l_H \<equiv> do {
-        ASSERT (a\<in>Domain uf \<and> b\<in>Domain uf);
-        if per_compare uf a b
-        then
-          RETURN (uf, l_H)
-        else do {
-          let uf = per_union uf a b;
-          ASSERT ((a, w, b) \<in> set l - set l_H);
-          RETURN (uf, (a, w, b)#l_H)
-        }}"
-
-
 lemma add_edge_refine:
   assumes "(l_H, H) \<in> lst_subgraph_rel G"
   assumes "(a, w, b) \<in> set l - set l_H"
@@ -656,27 +603,18 @@ lemma add_edge_refine:
   unfolding E_impl add_edge_def lst_subgraph_rel_def lst_subgraph_invar_def list_set_rel_def subgraph_of_lst_def
   by (auto simp: in_br_conv E_validD)
 
-lemma kruskal_loop_body_refine: "(kruskal_loop_body3, kruskal_loop_body2)\<in>Id \<rightarrow> Id \<rightarrow> Id \<rightarrow> Id
-    \<rightarrow> lst_subgraph_rel G \<rightarrow> \<langle>{((uf, l_H), (uf', H)) | uf uf' l_H H. (uf, uf') \<in> Id \<and> (l_H, H) \<in> lst_subgraph_rel G}\<rangle>nres_rel"
-  unfolding kruskal_loop_body3_def kruskal_loop_body2_def
-  apply (refine_vcg)
-  apply (vc_solve simp: add_edge_refine)
-  using E_impl
-  unfolding lst_subgraph_rel_def list_set_rel_def subgraph_of_lst_def
-  by (auto simp: in_br_conv)
-
-lemma empty_forest_refine: "(lst_empty_forest, empty_forest) \<in> lst_subgraph_rel G"
+lemma empty_forest_refine3: "((per_init V, lst_empty_forest), (per_init V, empty_forest))\<in>Id \<times>\<^sub>r lst_subgraph_rel G"
   unfolding empty_forest_def lst_empty_forest_def lst_subgraph_rel_def lst_subgraph_invar_def subgraph_of_lst_def
   by (auto simp: in_br_conv)
 
 theorem kruskal3_refine: "(kruskal3, kruskal2)\<in>\<langle>lst_subgraph_rel G\<rangle>nres_rel"
   unfolding kruskal3_def kruskal2_def
-  apply (fold kruskal_loop_body3_def kruskal_loop_body2_def)
   apply (rewrite at "let l = quicksort_by_rel edges_less_eq [] l in _" Let_def)
-  apply (refine_vcg kruskal_loop_body_refine[param_fo, THEN nres_relD])
+  apply (refine_vcg empty_forest_refine3)
   apply refine_dref_type
-  apply (vc_solve simp: empty_forest_refine)
-  done
+  using E_impl add_edge_refine
+  unfolding lst_subgraph_rel_def subgraph_of_lst_def
+  by (auto simp: in_br_conv)
 
 end
 
