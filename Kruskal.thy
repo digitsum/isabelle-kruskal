@@ -7,7 +7,7 @@ begin
 
 definition valid_union_find_graph :: "('v, 'w) graph \<Rightarrow> 'v per \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool"
   where "valid_union_find_graph G uf H \<equiv> (\<forall>a\<in>nodes G. \<forall>b\<in>nodes G.
-      (\<exists>p. is_path_undir H a p b) \<longleftrightarrow> (a,b) \<in> uf)"
+      (edges_connected H a b) \<longleftrightarrow> (a,b) \<in> uf)"
 
 definition "uf_graph_invar G uf_H \<equiv> case uf_H of (uf, H) \<Rightarrow>
     part_equiv uf \<and>
@@ -55,10 +55,12 @@ definition empty_forest :: "('v, 'w) graph"
   where "empty_forest \<equiv> \<lparr> nodes = V, edges = {} \<rparr>"
 
 definition previous_edges_connected :: "('v, 'w) graph \<Rightarrow> ('v \<times> 'w \<times> 'v) set \<Rightarrow> bool"
-  where "previous_edges_connected H E' \<equiv> (\<forall>(a, w, b)\<in>E - E'. \<exists>p. is_path_undir H a p b)"
+  where "previous_edges_connected H E' \<equiv>
+    (\<forall>(a, w, b)\<in>E - E'. edges_connected H a b)"
 
 definition exists_min_spanning_forest :: "('v, 'w) graph \<Rightarrow> bool"
-  where "exists_min_spanning_forest H \<equiv> (\<exists>T. subgraph H T \<and> is_minimum_spanning_forest T G)"
+  where "exists_min_spanning_forest H \<equiv>
+    (\<exists>T. subgraph H T \<and> is_minimum_spanning_forest T G)"
 
 definition loop_invar_kruskal :: "('v \<times> 'w \<times> 'v) set \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool"
   where "loop_invar_kruskal E' H \<equiv>
@@ -75,7 +77,7 @@ definition kruskal0 :: "('v, 'w) graph nres"
       (\<lambda>(a, w, b) H. do {
         ASSERT (subgraph H G);
         ASSERT (a\<in>V \<and> b\<in>V);
-        if (\<exists>p. is_path_undir H a p b)
+        if (edges_connected H a b)
         then
           RETURN H
         else do {
@@ -125,7 +127,7 @@ lemma loop_invar_kruskal_subgraph:
 lemma loop_invar_kruskal_edge_not_in_graph:
   assumes invar: "loop_invar_kruskal (insert (a, w, b) E') H"
   assumes "(a, w, b) \<in> E"
-  assumes "\<nexists>p. is_path_undir H a p b"
+  assumes "\<not> edges_connected H a b"
   shows "(a, w, b) \<notin> edges H"
 proof -
   from assms have "\<not> is_path_undir H a [(a, w, b)] b"
@@ -138,7 +140,7 @@ qed
 
 lemma preserve_previous_edges_connected_no_add:
   assumes "previous_edges_connected H (insert (a, w, b) E')"
-  assumes "\<exists>p. is_path_undir H a p b"
+  assumes "edges_connected H a b"
   shows "previous_edges_connected H E'"
   using assms
   unfolding previous_edges_connected_def
@@ -150,7 +152,7 @@ lemma preserve_previous_edges_connected_add:
   shows "previous_edges_connected (add_edge a w b H) E'"
   using assms
 proof -
-  have "\<exists>p. is_path_undir (add_edge a w b H) v p v'"
+  have "edges_connected (add_edge a w b H) v v'"
     if e: "(v, w', v')\<in>E - E'" for v w' v'
   proof (cases "(v, w', v') = (a, w, b)")
     case True
@@ -173,7 +175,7 @@ lemma exists_min_spanning_forest_add:
   assumes "previous_edges_connected H (insert (a, w, b) (set l2))"
   assumes "subgraph H G"
   assumes "(a,w,b) \<in> E"
-  assumes "\<nexists>p. is_path_undir H a p b"
+  assumes "\<not> edges_connected H a b"
   assumes "sorted_by_rel edges_less_eq (l1 @ (a, w, b) # l2)"
   shows "exists_min_spanning_forest (add_edge a w b H)"
 proof -
@@ -209,10 +211,10 @@ proof -
     obtain p where p: "is_path_undir T a p b"
       unfolding maximal_connected_def
       by (meson E_validD)
-    from forest.delete_edge_from_path[OF forest_T p subgraph_H_T \<open>\<nexists>p. is_path_undir H a p b\<close>]
+    with forest.delete_edge_from_path[OF forest_T _ subgraph_H_T \<open>\<not> edges_connected H a b\<close>]
     obtain x w' y where xy: "(x, w', y) \<in> edges T" "(x, w', y) \<notin> edges H" and
-      not_connected: "\<forall>p. \<not> is_path_undir (delete_edge x w' y T) a p b" and
-      connected_xy: "\<exists>p. is_path_undir (add_edge a w b (delete_edge x w' y T)) x p y"
+      not_connected: "\<not> edges_connected (delete_edge x w' y T) a b" and
+      connected_xy: "edges_connected (add_edge a w b (delete_edge x w' y T)) x y"
       by blast
     obtain T' where T': "T' = add_edge a w b (delete_edge x w' y T)"
       by blast
@@ -233,16 +235,14 @@ proof -
     from subgraph_H_T xy have subgraph_H_delete_T: "subgraph H (delete_edge x w' y T)"
       unfolding subgraph_def delete_edge_def
       by auto
-    have "\<forall>p. \<not> is_path_undir H x p y"
-    proof (rule ccontr)
-      assume "\<not> (\<forall>p. \<not> is_path_undir H x p y)"
-      then obtain p where p: "is_path_undir H x p y"
-        by auto
+    have "\<not> edges_connected H x y"
+    proof
+      assume asm: "edges_connected H x y"
       from forest.cycle_free[OF forest_T] xy(1)
-        have contr: "\<forall>p. \<not> is_path_undir (delete_edge x w' y T) x p y"
+        have contr: "\<not> edges_connected (delete_edge x w' y T) x y"
         by auto
-      with valid_graph.is_path_undir_subgraph[OF valid_delete_T p subgraph_H_delete_T]
-      show False by simp
+      with asm valid_graph.is_path_undir_subgraph[OF valid_delete_T _ subgraph_H_delete_T]
+      show False by blast
     qed
     with assms(2) ab_neq_xy have "(x, w', y) \<notin> E - (set l2)"
       unfolding previous_edges_connected_def by blast
@@ -287,17 +287,18 @@ qed
 
 lemma union_preserves_forest:
   assumes "forest H"
-  assumes "\<nexists>p. is_path_undir H a p b"
+  assumes "\<not> edges_connected H a b"
   assumes "subgraph H G"
   assumes "a \<in> V"
   assumes "b \<in> V"
   shows "forest (add_edge a w b H)"
-  using assms forest.forest_add_edge[of H] subgraph_node
-  by fast
+  using forest.forest_add_edge[OF \<open>forest H\<close> _ _ \<open>\<not>edges_connected H a b\<close>]
+    subgraph_node[OF \<open>subgraph H G\<close>] \<open>a\<in>V\<close> \<open>b\<in>V\<close>
+  by simp
 
 lemma union_preserves_loop_invar:
   assumes "loop_invar_kruskal (insert (a, w, b) (set l2)) H"
-  assumes "\<nexists>p. is_path_undir H a p b"
+  assumes "\<not> edges_connected H a b"
   assumes "insert (a, w, b) (set l1 \<union> set l2) = E"
   assumes "sorted_by_rel edges_less_eq (l1 @ (a, w, b) # l2)"
   shows "loop_invar_kruskal (set l2) (add_edge a w b H)"
@@ -311,7 +312,7 @@ lemma union_preserves_loop_invar:
 
 lemma same_component_preserves_loop_invar:
   assumes "loop_invar_kruskal (insert (a, w, b) E') H"
-  assumes "\<exists>p. is_path_undir H a p b"
+  assumes "edges_connected H a b"
   shows "loop_invar_kruskal E' H"
   using assms preserve_previous_edges_connected_no_add
   unfolding loop_invar_kruskal_def
@@ -385,10 +386,10 @@ lemma preserve_valid_union_find_graph_add:
 proof -
   from valid_subgraph[OF \<open>subgraph H G\<close>]
   have valid_H: "valid_graph H" .
-  have "(\<exists>p. is_path_undir (add_edge a w b H) x p y) \<longleftrightarrow> (x,y) \<in> per_union uf a b"
+  have "(edges_connected (add_edge a w b H) x y) \<longleftrightarrow> (x,y) \<in> per_union uf a b"
     if xy: "x\<in>V \<and> y\<in>V" for x y
   proof
-    assume "\<exists>p. is_path_undir (add_edge a w b H) x p y"
+    assume "edges_connected (add_edge a w b H) x y"
     then obtain p where p: "is_path_undir (add_edge a w b H) x p y"
       by blast
     from \<open>a\<in>V\<close> \<open>b\<in>V\<close> \<open>Domain uf = V\<close>
@@ -438,14 +439,14 @@ proof -
     qed
   next
     assume asm: "(x, y) \<in> per_union uf a b"
-    show "\<exists>p. is_path_undir (add_edge a w b H) x p y"
+    show "edges_connected (add_edge a w b H) x y"
       proof (cases "(x, y) \<in> uf")
         case True
-        with assms(1) xy obtain p where "is_path_undir H x p y"
+        with assms(1) xy have "edges_connected H x y"
           unfolding valid_union_find_graph_def
           by blast
-        with valid_graph.add_edge_is_path[OF valid_H this] show ?thesis
-          by auto
+        with valid_graph.add_edge_is_path[OF valid_H] show ?thesis
+          by blast
       next
         case False
         with asm part_equiv_sym[OF PER]
@@ -479,10 +480,10 @@ qed
 lemma valid_union_find_graph_empty:
   shows "valid_union_find_graph G (per_init V) empty_forest"
 proof -
-  have "(\<exists>p. is_path_undir empty_forest a p b) \<longleftrightarrow> (a,b) \<in> per_init V"
+  have "(edges_connected empty_forest a b) \<longleftrightarrow> (a,b) \<in> per_init V"
     if ab: "a\<in>V \<and> b\<in>V" for a b
   proof
-    assume "\<exists>p. is_path_undir empty_forest a p b"
+    assume "edges_connected empty_forest a b"
     then obtain p where p: "is_path_undir empty_forest a p b"
       by blast
     then have "a = b"
@@ -496,7 +497,7 @@ proof -
     from ab have "is_path_undir empty_forest a [] a"
       unfolding empty_forest_def
       by auto
-    with \<open>a=b\<close> show "\<exists>p. is_path_undir empty_forest a p b"
+    with \<open>a=b\<close> show "edges_connected empty_forest a b"
       by blast
   qed
   then show ?thesis

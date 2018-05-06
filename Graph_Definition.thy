@@ -10,15 +10,17 @@ fun is_path_undir :: "('v, 'w) graph \<Rightarrow> 'v \<Rightarrow> ('v,'w) path
     "is_path_undir G v [] v' \<longleftrightarrow> v=v' \<and> v'\<in>nodes G" |
     "is_path_undir G v ((v1,w,v2)#p) v' \<longleftrightarrow> v=v1 \<and> ((v1,w,v2)\<in>edges G \<or> (v2,w,v1)\<in>edges G) \<and> is_path_undir G v2 p v'"
 
+abbreviation "edges_connected G a b \<equiv> \<exists>p. is_path_undir G a p b"
+
 locale forest = valid_graph G
   for G :: "('v,'w) graph" +
   assumes cycle_free:
-    "\<forall>(a,w,b)\<in>E. \<forall>p. \<not> is_path_undir (delete_edge a w b G) a p b"
+    "\<forall>(a,w,b)\<in>E. \<not> edges_connected (delete_edge a w b G) a b"
 
 locale connected_graph = valid_graph G
   for G :: "('v,'w) graph" +
   assumes connected:
-    "\<forall>v\<in>V. \<forall>v'\<in>V. \<exists>p. is_path_undir G v p v'"
+    "\<forall>v\<in>V. \<forall>v'\<in>V. edges_connected G v v'"
 
 locale tree = forest + connected_graph
 
@@ -40,7 +42,7 @@ definition edges_less_eq :: "('a \<times> 'w::weight \<times> 'a) \<Rightarrow> 
 
 definition maximal_connected :: "('v, 'w) graph \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool" where
   "maximal_connected H G \<equiv> \<forall>v\<in>nodes G. \<forall>v'\<in>nodes G.
-    (\<exists>p. is_path_undir G v p v') \<longrightarrow> (\<exists>p. is_path_undir H v p v')"
+    (edges_connected G v v') \<longrightarrow> (edges_connected H v v')"
 
 definition is_spanning_forest :: "('v, 'w) graph \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool" where
   "is_spanning_forest F G \<equiv> forest F \<and> maximal_connected F G \<and> subgraph F G"
@@ -314,12 +316,12 @@ begin
 
   lemma induce_maximal_connected:
     assumes "subgraph H G"
-    assumes "\<forall>(a,w,b)\<in>E. (\<exists>p. is_path_undir H a p b)"
+    assumes "\<forall>(a,w,b)\<in>E. edges_connected H a b"
     shows "maximal_connected H G"
   proof -
     from valid_subgraph[OF \<open>subgraph H G\<close>]
     have valid_H: "valid_graph H" .
-    have "(\<exists>p. is_path_undir G v p v') \<longrightarrow> (\<exists>p. is_path_undir H v p v')" (is "?lhs \<longrightarrow> ?rhs")
+    have "(edges_connected G v v') \<longrightarrow> (edges_connected H v v')" (is "?lhs \<longrightarrow> ?rhs")
       if v: "v\<in>V" and v': "v'\<in>V" for v v'
     proof
       assume ?lhs
@@ -408,7 +410,7 @@ begin
     assumes "(a, w, b) \<in> E"
     shows "maximal_connected (add_edge a w b H) G"
   proof -
-    have "(\<exists>p. is_path_undir G v p v') \<longrightarrow> (\<exists>p. is_path_undir (add_edge a w b H) v p v')" (is "?lhs \<longrightarrow> ?rhs")
+    have "(edges_connected G v v') \<longrightarrow> (edges_connected (add_edge a w b H) v v')" (is "?lhs \<longrightarrow> ?rhs")
       if vv': "v \<in> V" "v' \<in> V" for v v'
     proof
       assume ?lhs
@@ -432,7 +434,7 @@ begin
   proof -
     from valid_subgraph[OF \<open>subgraph H G\<close>]
     have valid_H: "valid_graph H" .
-    have "(\<exists>p. is_path_undir G v p v') \<longleftrightarrow> (\<exists>p. is_path_undir (delete_edge a w b H) v p v')" (is "?lhs \<longleftrightarrow> ?rhs")
+    have "(edges_connected G v v') \<longleftrightarrow> (edges_connected (delete_edge a w b H) v v')" (is "?lhs \<longleftrightarrow> ?rhs")
       if vv': "v \<in> V" "v' \<in> V" for v v'
     proof
       assume ?lhs
@@ -489,61 +491,69 @@ begin
     by blast
 
   lemma add_edge_is_connected:
-    "\<exists>p p'. is_path_undir (add_edge a b c G) a p c \<and>
-            is_path_undir (add_edge a b c G) c p' a"
-  using valid_graph.is_path_undir_simps(2)[OF add_edge_valid[OF valid_graph_axioms]]
-  sorry
+    "edges_connected (add_edge a b c G) a c"
+    "edges_connected (add_edge a b c G) c a"
+  using valid_graph.is_path_undir_simps(2)[OF
+        add_edge_valid[OF valid_graph_axioms], of a b c a b c]
+      valid_graph.is_path_undir_simps(2)[OF
+        add_edge_valid[OF valid_graph_axioms], of a b c c b a]
+  by fastforce+
 
   lemma swap_edges:
-    assumes "is_path_undir (add_edge a w b G) v p v'"
+    assumes "edges_connected (add_edge a w b G) v v'"
     assumes "a \<in> V"
     assumes "b \<in> V"
-    shows "\<exists>p'. is_path_undir (add_edge v w' v' G) a p' b \<or> is_path_undir G v p' v'"
-  proof (cases "(a, w, b) \<in> set p \<or> (b, w, a) \<in> set p")
-    case True
-    from valid_graph.is_path_undir_split_distinct[OF
-        add_edge_valid[OF valid_graph_axioms] assms(1) True]
-    obtain p' p'' u u' where
-         "is_path_undir (add_edge a w b G) v p' u \<and>
-          is_path_undir (add_edge a w b G) u' p'' v'" and
-          u: "u \<in> {a, b} \<and> u' \<in> {a, b}" and
-          "(a, w, b) \<notin> set p' \<and> (b, w, a) \<notin> set p' \<and>
-          (a, w, b) \<notin> set p'' \<and> (b, w, a) \<notin> set p'' "
+    shows "edges_connected (add_edge v w' v' G) a b \<or> edges_connected G v v'"
+  proof -
+    from assms(1) obtain p where p: "is_path_undir (add_edge a w b G) v p v'"
       by auto
-    with assms add_edge_was_path
-    have paths: "is_path_undir G v p' u \<and>
-                 is_path_undir G u' p'' v'"
-      by blast
     show ?thesis
-    proof (cases "u = u'")
+    proof (cases "(a, w, b) \<in> set p \<or> (b, w, a) \<in> set p")
       case True
-      with paths is_path_undir_split[of v p' p'' v']
-      show ?thesis
+      from valid_graph.is_path_undir_split_distinct[OF
+          add_edge_valid[OF valid_graph_axioms] p True]
+      obtain p' p'' u u' where
+           "is_path_undir (add_edge a w b G) v p' u \<and>
+            is_path_undir (add_edge a w b G) u' p'' v'" and
+            u: "u \<in> {a, b} \<and> u' \<in> {a, b}" and
+            "(a, w, b) \<notin> set p' \<and> (b, w, a) \<notin> set p' \<and>
+            (a, w, b) \<notin> set p'' \<and> (b, w, a) \<notin> set p'' "
         by auto
+      with assms add_edge_was_path
+      have paths: "is_path_undir G v p' u \<and>
+                   is_path_undir G u' p'' v'"
+        by blast
+      show ?thesis
+      proof (cases "u = u'")
+        case True
+        with paths is_path_undir_split[of v p' p'' v']
+        show ?thesis
+          by auto
+      next
+        case False
+        from paths assms add_edge_is_path
+        obtain p' p'' where
+          paths': "is_path_undir (add_edge v w' v' G) v p' u \<and>
+                  is_path_undir (add_edge v w' v' G) u' p'' v'"
+          by blast
+        from add_edge_is_connected obtain p''' where
+          "is_path_undir (add_edge v w' v' G) v' p''' v"
+          by blast
+        with paths' valid_graph.is_path_undir_split[OF add_edge_valid[OF valid_graph_axioms], of v w' v' u' p'' p''' v]
+        have "is_path_undir (add_edge v w' v' G) u' (p''@p''') v"
+            by auto
+        with paths' valid_graph.is_path_undir_split[OF add_edge_valid[OF valid_graph_axioms], of v w' v' u' "p''@p'''" p' u]
+        have "is_path_undir (add_edge v w' v' G) u' (p''@p'''@p') u"
+            by auto
+        with u False valid_graph.is_path_undir_sym[OF add_edge_valid[OF valid_graph_axioms] this]
+        show ?thesis
+          by auto
+      qed
     next
       case False
-      from paths assms add_edge_is_path
-      obtain p' p'' where
-        paths': "is_path_undir (add_edge v w' v' G) v p' u \<and>
-                is_path_undir (add_edge v w' v' G) u' p'' v'"
-        by blast
-      from add_edge_is_connected obtain p''' where
-        "is_path_undir (add_edge v w' v' G) v' p''' v"
-        by blast
-      with paths' valid_graph.is_path_undir_split[OF add_edge_valid[OF valid_graph_axioms], of v w' v' u' p'' p''' v]
-      have "is_path_undir (add_edge v w' v' G) u' (p''@p''') v"
-          by auto
-      with paths' valid_graph.is_path_undir_split[OF add_edge_valid[OF valid_graph_axioms], of v w' v' u' "p''@p'''" p' u]
-      have "is_path_undir (add_edge v w' v' G) u' (p''@p'''@p') u"
-          by auto
-      with u False valid_graph.is_path_undir_sym[OF add_edge_valid[OF valid_graph_axioms] this]
-      show ?thesis
-        by auto
+      with add_edge_was_path[OF p _ _ assms(2,3)]
+      show ?thesis by auto
     qed
-  next
-    case False
-    with add_edge_was_path[OF assms(1) _ _ assms(2,3)]
-    show ?thesis by auto
   qed
 end
 
@@ -562,129 +572,133 @@ end
 context forest
 begin
   lemma delete_edge_from_path:
-    assumes "is_path_undir G a p b"
+    assumes "edges_connected G a b"
     assumes "subgraph H G"
-    assumes "\<nexists>p. is_path_undir H a p b"
-    shows "\<exists>(x, w, y) \<in> E - edges H.  (\<forall>p. \<not>is_path_undir (delete_edge x w y G) a p b) \<and>
-      (\<exists>p. is_path_undir (add_edge a w' b (delete_edge x w y G)) x p y)"
-  using assms(1,3)
-  proof (induction n == "length p" arbitrary: p a rule: nat_less_induct)
-    case 1
-    from valid_subgraph[OF assms(2)] have valid_H: "valid_graph H" .
-    show ?case
-    proof (cases p)
-      case Nil
-      with 1(2) have "a = b"
-        by simp
-      with `a = b` 1(2) assms(2) have "is_path_undir H a [] b"
-        unfolding subgraph_def
-        by auto
-      with 1(3) show ?thesis
-        by blast
-    next
-      case (Cons e p')
-      from 1 obtain a2 a' w where "e = (a2, w, a')"
-        using prod_cases3 by blast
-      with 1(2) Cons have e: "e = (a, w, a')"
-        by simp
-      with 1(2) Cons obtain e1 e2 where e12: "e = (e1, w, e2) \<or> e = (e2, w, e1)" and
-        edge_e12: "(e1, w, e2) \<in> E"
-        by auto
-      from 1(2) Cons e have "is_path_undir G a' p' b"
-        by simp
-      with is_path_undir_split_distinct[OF this, of a w a'] Cons
-      obtain p'_dst u' where  p'_dst: "is_path_undir G u' p'_dst b \<and> u' \<in> {a, a'}" and
-          e_not_in_p': "(a, w, a') \<notin> set p'_dst \<and> (a', w, a) \<notin> set p'_dst" and
-          len_p': "length p'_dst < length p"
-        by fastforce
-      show ?thesis
-      proof (cases "u' = a'")
-        case False
-        with 1 len_p' p'_dst show ?thesis
+    assumes "\<not> edges_connected H a b"
+    shows "\<exists>(x, w, y) \<in> E - edges H.  (\<not> edges_connected (delete_edge x w y G) a b) \<and>
+      (edges_connected (add_edge a w' b (delete_edge x w y G)) x y)"
+  proof -
+    from assms(1) obtain p where "is_path_undir G a p b"
+      by auto
+    from this assms(3) show ?thesis
+    proof (induction n == "length p" arbitrary: p a rule: nat_less_induct)
+      case 1
+      from valid_subgraph[OF assms(2)] have valid_H: "valid_graph H" .
+      show ?case
+      proof (cases p)
+        case Nil
+        with 1(2) have "a = b"
+          by simp
+        with 1(2) assms(2) have "is_path_undir H a [] b"
+          unfolding subgraph_def
           by auto
+        with 1(3) show ?thesis
+          by blast
       next
-        case True
-        with p'_dst have path_p': "is_path_undir G a' p'_dst b"
+        case (Cons e p')
+        from 1 obtain a2 a' w where "e = (a2, w, a')"
+          using prod_cases3 by blast
+        with 1(2) Cons have e: "e = (a, w, a')"
+          by simp
+        with 1(2) Cons obtain e1 e2 where e12: "e = (e1, w, e2) \<or> e = (e2, w, e1)" and
+          edge_e12: "(e1, w, e2) \<in> E"
           by auto
+        from 1(2) Cons e have "is_path_undir G a' p' b"
+          by simp
+        with is_path_undir_split_distinct[OF this, of a w a'] Cons
+        obtain p'_dst u' where  p'_dst: "is_path_undir G u' p'_dst b \<and> u' \<in> {a, a'}" and
+            e_not_in_p': "(a, w, a') \<notin> set p'_dst \<and> (a', w, a) \<notin> set p'_dst" and
+            len_p': "length p'_dst < length p"
+          by fastforce
         show ?thesis
-        proof (cases "(e1, w, e2) \<in> edges H")
-          case True
-          have "\<nexists>p. is_path_undir H a' p b"
-          proof
-            assume "\<exists>p. is_path_undir H a' p b"
-            then obtain p_H where "is_path_undir H a' p_H b"
-              by auto
-            with True e12 e have "is_path_undir H a (e#p_H) b"
-              by auto
-            with 1(3) show False
-              by simp
-          qed
-          with path_p' 1(1) len_p' obtain x z y where xy: "(x, z, y) \<in> E - edges H" and
-            IH1: "(\<forall>p. \<not>is_path_undir (delete_edge x z y G) a' p b)" and
-            IH2: "(\<exists>p. is_path_undir (add_edge a' w' b (delete_edge x z y G)) x p y)"
-            by blast
-          have xy_neq_aa': "(x, z, y) \<noteq> (a', w, a) \<and> (x, z, y) \<noteq> (a, w, a')"
-          proof (rule ccontr)
-            assume "\<not> ((x, z, y) \<noteq> (a', w, a) \<and> (x, z, y) \<noteq> (a, w, a'))"
-            with e_not_in_p' have "(x, z, y) \<notin> set p'_dst \<and> (y, z, x) \<notin> set p'_dst"
-              by auto
-            with delete_edge_is_path[OF path_p'] IH1
-            show False
-              by auto
-          qed
-          have thm1: "\<forall>p. \<not>is_path_undir (delete_edge x z y G) a p b"
-          proof (rule ccontr)
-            assume "\<not> (\<forall>p. \<not>is_path_undir (delete_edge x z y G) a p b)"
-            then obtain p_e where "is_path_undir (delete_edge x z y G) a p_e b"
-              by auto
-            with True edge_e12 e12 e xy_neq_aa' have "is_path_undir (delete_edge x z y G) a' ((a', w, a)#p_e) b"
-              by auto
-            with IH1 show False
-              by blast
-          qed
-          from IH2 obtain p_ad where "is_path_undir (add_edge a' w' b (delete_edge x z y G)) x p_ad y"
-            by auto
-          from valid_graph.swap_add_edge_in_path[OF delete_edge_valid[OF valid_graph_axioms] this, of w a] edge_e12
-            e12 e edges_delete_edge[of x z y G] xy_neq_aa'
-          have thm2: "\<exists>p. is_path_undir (add_edge a w' b (delete_edge x z y G)) x p y"
-            by blast
-          with thm1 show ?thesis
-            using xy by auto
-        next
+        proof (cases "u' = a'")
           case False
-          have thm1: "\<forall>p. \<not>is_path_undir (delete_edge e1 w e2 G) a p b"
-          proof (rule ccontr)
-            assume "\<not> (\<forall>p. \<not>is_path_undir (delete_edge e1 w e2 G) a p b)"
-            then obtain p_e where p_e: "is_path_undir (delete_edge e1 w e2 G) a p_e b"
+          with 1 len_p' p'_dst show ?thesis
+            by auto
+        next
+          case True
+          with p'_dst have path_p': "is_path_undir G a' p'_dst b"
+            by auto
+          show ?thesis
+          proof (cases "(e1, w, e2) \<in> edges H")
+            case True
+            have "\<nexists>p. is_path_undir H a' p b"
+            proof
+              assume "\<exists>p. is_path_undir H a' p b"
+              then obtain p_H where "is_path_undir H a' p_H b"
+                by auto
+              with True e12 e have "is_path_undir H a (e#p_H) b"
+                by auto
+              with 1(3) show False
+                by simp
+            qed
+            with path_p' 1(1) len_p' obtain x z y where xy: "(x, z, y) \<in> E - edges H" and
+              IH1: "(\<not>edges_connected (delete_edge x z y G) a' b)" and
+              IH2: "(edges_connected (add_edge a' w' b (delete_edge x z y G)) x y)"
+              by blast
+            have xy_neq_aa': "(x, z, y) \<noteq> (a', w, a) \<and> (x, z, y) \<noteq> (a, w, a')"
+            proof (rule ccontr)
+              assume "\<not> ((x, z, y) \<noteq> (a', w, a) \<and> (x, z, y) \<noteq> (a, w, a'))"
+              with e_not_in_p' have "(x, z, y) \<notin> set p'_dst \<and> (y, z, x) \<notin> set p'_dst"
+                by auto
+              with delete_edge_is_path[OF path_p'] IH1
+              show False
+                by auto
+            qed
+            have thm1: "\<not> edges_connected (delete_edge x z y G) a b"
+            proof
+              assume "edges_connected (delete_edge x z y G) a b"
+              then obtain p_e where "is_path_undir (delete_edge x z y G) a p_e b"
+                by auto
+              with True edge_e12 e12 e xy_neq_aa' have "is_path_undir (delete_edge x z y G) a' ((a', w, a)#p_e) b"
+                by auto
+              with IH1 show False
+                by blast
+            qed
+            from IH2 obtain p_ad where "is_path_undir (add_edge a' w' b (delete_edge x z y G)) x p_ad y"
               by auto
-            from delete_edge_is_path[OF path_p', of e1 w e2] e_not_in_p' e12 e
-            obtain p_d where "is_path_undir (delete_edge e1 w e2 G) a' p_d b"
+            from valid_graph.swap_add_edge_in_path[OF delete_edge_valid[OF valid_graph_axioms] this, of w a] edge_e12
+              e12 e edges_delete_edge[of x z y G] xy_neq_aa'
+            have thm2: "\<exists>p. is_path_undir (add_edge a w' b (delete_edge x z y G)) x p y"
+              by blast
+            with thm1 show ?thesis
+              using xy by auto
+          next
+            case False
+            have thm1: "\<not> edges_connected (delete_edge e1 w e2 G) a b"
+            proof
+              assume "edges_connected (delete_edge e1 w e2 G) a b"
+              then obtain p_e where p_e: "is_path_undir (delete_edge e1 w e2 G) a p_e b"
+                by auto
+              from delete_edge_is_path[OF path_p', of e1 w e2] e_not_in_p' e12 e
+              obtain p_d where "is_path_undir (delete_edge e1 w e2 G) a' p_d b"
+                by auto
+              with valid_graph.is_path_undir_sym[OF delete_edge_valid[OF valid_graph_axioms] this]
+              obtain p_rev where "is_path_undir (delete_edge e1 w e2 G) b p_rev a'"
+                by auto
+              with p_e valid_graph.is_path_undir_split[OF delete_edge_valid[OF valid_graph_axioms]]
+              have "is_path_undir (delete_edge e1 w e2 G) a (p_e@p_rev) a'"
+                by auto
+              with cycle_free edge_e12 e12 e valid_graph.is_path_undir_sym[OF delete_edge_valid[OF valid_graph_axioms] this]
+              show False
+                unfolding valid_graph_def
+                by auto
+            qed
+            from valid_graph.is_path_undir_split[OF add_edge_valid[OF delete_edge_valid[OF valid_graph_axioms]]]
+              valid_graph.add_edge_is_path[OF delete_edge_valid[OF valid_graph_axioms]
+                                              delete_edge_is_path[OF path_p', of e1 w e2], of a w' b]
+              valid_graph.is_path_undir_simps(2)[OF add_edge_valid[OF delete_edge_valid[OF valid_graph_axioms]],
+                                                 of a w' b e1 w e2 b w' a]
+              e_not_in_p' e12 e
+            have "is_path_undir (add_edge a w' b (delete_edge e1 w e2 G)) a' (p'_dst@[(b,w',a)]) a"
               by auto
-            with valid_graph.is_path_undir_sym[OF delete_edge_valid[OF valid_graph_axioms] this]
-            obtain p_rev where "is_path_undir (delete_edge e1 w e2 G) b p_rev a'"
+            with valid_graph.is_path_undir_sym[OF add_edge_valid[OF delete_edge_valid[OF valid_graph_axioms]] this]
+              e12 e
+            have "edges_connected (add_edge a w' b (delete_edge e1 w e2 G)) e1 e2"
               by auto
-            with p_e valid_graph.is_path_undir_split[OF delete_edge_valid[OF valid_graph_axioms]]
-            have "is_path_undir (delete_edge e1 w e2 G) a (p_e@p_rev) a'"
-              by auto
-            with cycle_free edge_e12 e12 e valid_graph.is_path_undir_sym[OF delete_edge_valid[OF valid_graph_axioms] this]
-            show False
-              unfolding valid_graph_def
-              by auto
+            with thm1 show ?thesis
+              using False edge_e12 by auto
           qed
-          from valid_graph.is_path_undir_split[OF add_edge_valid[OF delete_edge_valid[OF valid_graph_axioms]]]
-            valid_graph.add_edge_is_path[OF delete_edge_valid[OF valid_graph_axioms]
-                                            delete_edge_is_path[OF path_p', of e1 w e2], of a w' b]
-            valid_graph.is_path_undir_simps(2)[OF add_edge_valid[OF delete_edge_valid[OF valid_graph_axioms]],
-                                               of a w' b e1 w e2 b w' a]
-            e_not_in_p' e12 e
-          have "is_path_undir (add_edge a w' b (delete_edge e1 w e2 G)) a' (p'_dst@[(b,w',a)]) a"
-            by auto
-          with valid_graph.is_path_undir_sym[OF add_edge_valid[OF delete_edge_valid[OF valid_graph_axioms]] this]
-            e12 e
-          have "\<exists>p. is_path_undir (add_edge a w' b (delete_edge e1 w e2 G)) e1 p e2"
-            by auto
-          with thm1 show ?thesis
-            using False edge_e12 by auto
         qed
       qed
     qed
@@ -693,15 +707,15 @@ begin
   lemma forest_add_edge:
     assumes "a \<in> V"
     assumes "c \<in> V"
-    assumes "\<forall>p. \<not> is_path_undir G a p c"
+    assumes "\<not> edges_connected G a c"
     shows "forest (add_edge a w c G)"
   proof -
     from assms(3) have "\<not> is_path_undir G a [(a, w, c)] c"
       by blast
     with assms(2) have awc: "(a, w, c) \<notin> E \<and> (c, w, a) \<notin> E"
       by auto
-    have "\<not> is_path_undir (delete_edge v w' v' (add_edge a w c G)) v p v'"
-       if e: "(v,w',v')\<in> edges (add_edge a w c G)" for p v w' v'
+    have "\<not> edges_connected (delete_edge v w' v' (add_edge a w c G)) v v'"
+       if e: "(v,w',v')\<in> edges (add_edge a w c G)" for v w' v'
     proof (cases "(v,w',v') = (a, w, c)")
       case True
       with assms awc delete_add_edge[of a G c w]
@@ -712,12 +726,12 @@ begin
         by auto
       show ?thesis
       proof
-        assume asm: "is_path_undir (delete_edge v w' v' (add_edge a w c G)) v p v'"
+        assume asm: "edges_connected (delete_edge v w' v' (add_edge a w c G)) v v'"
         with swap_delete_add_edge[OF False, of G]
-          valid_graph.swap_edges[OF delete_edge_valid[OF valid_graph_axioms], of a w c v w' v' v p v' w']
+          valid_graph.swap_edges[OF delete_edge_valid[OF valid_graph_axioms], of a w c v w' v' v v' w']
           add_delete_edge[OF e'] cycle_free assms(1,2) e'
-        have "\<exists>p'. is_path_undir G a p' c"
-          by auto
+        have "edges_connected G a c"
+          by force
         with assms show False
           by simp
       qed
@@ -728,19 +742,19 @@ begin
 
   lemma forest_delete_edge: "forest (delete_edge a w c G)"
   proof -
-    have "\<not> is_path_undir (delete_edge v w' v' (delete_edge a w c G)) v p v'"
-       if e: "(v,w',v')\<in> edges (delete_edge a w c G)" for p v w' v'
+    have "\<not> edges_connected (delete_edge v w' v' (delete_edge a w c G)) v v'"
+       if e: "(v,w',v')\<in> edges (delete_edge a w c G)" for v w' v'
     proof
-      assume asm: "is_path_undir (delete_edge v w' v' (delete_edge a w c G)) v p v'"
+      assume asm: "edges_connected (delete_edge v w' v' (delete_edge a w c G)) v v'"
       with swap_delete_edges[of v w' v' a w c G]
-      have asm': "is_path_undir (delete_edge a w c (delete_edge v w' v' G)) v p v'"
+      have asm': "edges_connected (delete_edge a w c (delete_edge v w' v' G)) v v'"
         by simp
       from cycle_free e
-      have "\<not> is_path_undir (delete_edge v w' v' G) v p v'"
+      have "\<not> edges_connected (delete_edge v w' v' G) v v'"
           unfolding delete_edge_def by auto
-      with valid_graph.delete_edge_was_path[OF delete_edge_valid[OF valid_graph_axioms] asm']
+      with valid_graph.delete_edge_was_path[OF delete_edge_valid[OF valid_graph_axioms]] asm'
       show False
-        by simp
+        by blast
     qed
     with cycle_free delete_edge_valid[OF valid_graph_axioms] show ?thesis
       unfolding forest_def forest_axioms_def by blast
@@ -750,7 +764,7 @@ end
 context finite_graph
 begin
   lemma forest_connecting_all_edges_exists: "\<exists>F. forest F \<and> subgraph F G \<and>
-      (\<forall>(a,w,b)\<in>edges G. \<exists>p. is_path_undir F a p b)"
+      (\<forall>(a,w,b)\<in>edges G. edges_connected F a b)"
     using finite_E valid_graph_axioms
   proof (induction n == "card (edges G)" arbitrary: G)
     case  (0 G)
@@ -776,7 +790,7 @@ begin
       unfolding delete_edge_def
       by auto
     ultimately obtain F where F: "forest F" "subgraph F (delete_edge a w b G)"
-        "(\<forall>(a,w,b)\<in>edges (delete_edge a w b G). \<exists>p. is_path_undir F a p b)"
+        "(\<forall>(a,w,b)\<in>edges (delete_edge a w b G). edges_connected F a b)"
       using Suc.hyps(1)
       unfolding valid_graph_def
       by blast
@@ -784,9 +798,9 @@ begin
       unfolding subgraph_def delete_edge_def
       by auto
     show ?case
-    proof (cases "\<exists>p. is_path_undir F a p b")
+    proof (cases "edges_connected F a b")
       case True
-      from F True have "(\<forall>(a,w,b)\<in>edges G. \<exists>p. is_path_undir F a p b)"
+      from F True have "(\<forall>(a,w,b)\<in>edges G. edges_connected F a b)"
         unfolding delete_edge_def by fastforce
       with F subgraph_F show ?thesis
         by auto
@@ -803,7 +817,7 @@ begin
       have "subgraph (add_edge a w b F) G"
         unfolding subgraph_def add_edge_def delete_edge_def
         by (auto simp: valid_graph.E_validD)
-      moreover have "\<exists>p. is_path_undir (add_edge a w b F) c p d"
+      moreover have "edges_connected (add_edge a w b F) c d"
         if asm: "(c,w',d)\<in>edges G" for c w' d
       proof (cases "(c, w', d) = (a, w, b)")
         case True
@@ -811,11 +825,11 @@ begin
         show ?thesis by auto
       next
         case False
-        with F(3) asm obtain p where "is_path_undir F c p d"
-          unfolding delete_edge_def by fastforce
-        then have "is_path_undir (add_edge a w b F) c p d"
-          by (induction p arbitrary: c) auto
-        then show ?thesis by auto
+        with F(3) asm have "edges_connected F c d"
+          by fastforce
+        with valid_graph.add_edge_is_path[OF forest.axioms(1)[OF F(1)]]
+        show ?thesis
+          by blast
       qed
       ultimately show ?thesis
         by auto
@@ -838,7 +852,7 @@ begin
   proof -
     from forest_connecting_all_edges_exists
     obtain F where F: "forest F" "subgraph F G"
-      "(\<forall>(a, w, b)\<in>edges G. \<exists>p. is_path_undir F a p b)"
+      "(\<forall>(a, w, b)\<in>edges G. edges_connected F a b)"
       unfolding finite_graph_def finite_graph_axioms_def valid_graph_def
       by blast
     from F(2,3) forest.axioms(1)[OF F(1)] induce_maximal_connected[of F]
