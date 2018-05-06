@@ -555,6 +555,15 @@ begin
       show ?thesis by auto
     qed
   qed
+
+  lemma subgraph_impl_connected:
+    assumes "connected_graph H"
+    assumes subgraph: "subgraph H G"
+    shows "connected_graph G"
+    using assms is_path_undir_subgraph[OF _ subgraph] valid_graph_axioms
+    unfolding connected_graph_def connected_graph_axioms_def maximal_connected_def
+      subgraph_def
+    by blast
 end
 
 context connected_graph
@@ -759,6 +768,10 @@ begin
     with cycle_free delete_edge_valid[OF valid_graph_axioms] show ?thesis
       unfolding forest_def forest_axioms_def by blast
   qed
+
+  lemma connected_by_number_of_edges:
+    "connected_graph G \<longleftrightarrow> card E = card V - 1"
+    sorry
 end
 
 context finite_graph

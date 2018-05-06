@@ -657,14 +657,18 @@ theorem kruskal4_refine: "(kruskal4, kruskal3)\<in>\<langle>Id\<rangle>nres_rel"
 
 end
 
+section \<open>Kruskal 5\<close>
+
 concrete_definition kruskal5 uses Kruskal_list_nat.kruskal4_def
+
+section \<open>Kruskal\<close>
 
 definition "sort_edges \<equiv> quicksort_by_rel edges_less_eq []"
 
 lemma [sepref_import_param]: "(sort_edges,sort_edges)\<in>\<langle>Id\<times>\<^sub>rId\<times>\<^sub>rId\<rangle>list_rel \<rightarrow>\<langle>Id\<times>\<^sub>rId\<times>\<^sub>rId\<rangle>list_rel" by simp
 lemma [sepref_import_param]: "(max_node, max_node) \<in> \<langle>Id\<times>\<^sub>rId\<times>\<^sub>rId\<rangle>list_rel \<rightarrow> nat_rel" by simp
 
-sepref_definition kruskal6 is
+sepref_definition kruskal is
   "kruskal5" :: "(list_assn (nat_assn\<times>\<^sub>aint_assn\<times>\<^sub>anat_assn))\<^sup>k \<rightarrow>\<^sub>a list_assn (nat_assn \<times>\<^sub>a int_assn \<times>\<^sub>a nat_assn)"
   unfolding kruskal5_def sort_edges_def[symmetric]
   apply (rewrite at "nfoldli _ _ _ (_,\<hole>)" HOL_list.fold_custom_empty)
@@ -679,9 +683,9 @@ context Kruskal_list_nat begin
     FCOMP kruskal0_refine
     ]
 
-  lemma kruskal6_refine: "(uncurry0 (kruskal6 l), uncurry0 (kruskal5 l))
+  lemma kruskal6_refine: "(uncurry0 (kruskal l), uncurry0 (kruskal5 l))
     \<in> unit_assn\<^sup>k \<rightarrow>\<^sub>a list_assn (nat_assn \<times>\<^sub>a int_assn \<times>\<^sub>a nat_assn)"
-    using kruskal6.refine
+    using kruskal.refine
     unfolding list_assn_pure_conv prod_assn_pure_conv
     unfolding hfref_def hn_refine_def pure_def hn_ctxt_def
     by auto
@@ -689,14 +693,13 @@ context Kruskal_list_nat begin
   lemma [fcomp_norm_simps]: "list_assn (nat_assn \<times>\<^sub>a int_assn \<times>\<^sub>a nat_assn) = id_assn"
     by (auto simp: list_assn_pure_conv)
 
-  lemmas kruskal6_ref_spec = kruskal6_refine[FCOMP kruskal5_ref_spec]
+  lemmas kruskal_ref_spec = kruskal6_refine[FCOMP kruskal5_ref_spec]
 end
 
-
-lemma kruskal6_forest:
+lemma kruskal_correct_forest:
   fixes l
   defines "G \<equiv> graph_of_list l"
-  shows "<emp> kruskal6 l <\<lambda>r. \<up>(lst_subgraph_invar r \<and> is_minimum_spanning_forest (subgraph_of_lst G r) G)>\<^sub>t"
+  shows "<emp> kruskal l <\<lambda>r. \<up>(lst_subgraph_invar r \<and> is_minimum_spanning_forest (subgraph_of_lst G r) G)>\<^sub>t"
 proof -
   interpret Kruskal "graph_of_list l"
     apply unfold_locales
@@ -707,7 +710,7 @@ proof -
     by unfold_locales
 
   show ?thesis
-    using kruskal6_ref_spec[to_hnr]
+    using kruskal_ref_spec[to_hnr]
     unfolding hn_refine_def lst_subgraph_rel_def
     apply clarsimp
     apply (erule cons_post_rule)
@@ -715,20 +718,149 @@ proof -
     done
 qed
 
-lemma kruskal6_tree:
+lemma kruskal_correct_tree:
   fixes l
   defines "G \<equiv> graph_of_list l"
   assumes connected_G: "connected_graph G"
-  shows "<emp> kruskal6 l <\<lambda>r. \<up>(lst_subgraph_invar r \<and> is_minimum_spanning_tree (subgraph_of_lst G r) G)>\<^sub>t"
-  using kruskal6_forest minimum_spanning_forest_impl_tree2[OF _ connected_G]
+  shows "<emp> kruskal l <\<lambda>r. \<up>(lst_subgraph_invar r \<and> is_minimum_spanning_tree (subgraph_of_lst G r) G)>\<^sub>t"
+  using kruskal_correct_forest minimum_spanning_forest_impl_tree2[OF _ connected_G]
   apply clarsimp
   apply (rule cons_post_rule)
   apply (auto simp: G_def)
   done
 
-export_code kruskal6 checking SML_imp
-export_code kruskal6 in SML_imp module_name Kruskal (*file "Kruskal.sml"*)
+section \<open>Kruskal tree\<close>
 
+definition kruskal_tree_spec :: "('v, 'w::weight) graph \<Rightarrow> ('v, 'w) graph option nres"
+  where "kruskal_tree_spec G \<equiv> do {
+    ASSERT (valid_graph G);
+    SPEC (\<lambda>F.
+      if connected_graph G
+      then \<exists>F'. F = Some F' \<and> is_minimum_spanning_tree F' G
+      else F = None)
+    }"
+
+definition kruskal_tree1 :: "('v, 'w::weight) graph \<Rightarrow> ('v, 'w) graph option nres"
+  where "kruskal_tree1 G \<equiv> do {
+    ASSERT (valid_graph G);
+    spanning_forest \<leftarrow> SPEC (\<lambda>F. is_minimum_spanning_forest F G);
+    ASSERT (forest spanning_forest);
+    connected \<leftarrow> SPEC (\<lambda>conn. conn = connected_graph spanning_forest);
+    if connected
+    then RETURN (Some spanning_forest)
+    else RETURN None
+  }"
+
+theorem kruskal_tree1_refine:
+  "(kruskal_tree1 G, kruskal_tree_spec G) \<in> \<langle>Id\<rangle>nres_rel"
+  unfolding kruskal_tree1_def kruskal_tree_spec_def
+  apply(refine_vcg)
+  apply (auto simp: minimum_spanning_forest_impl_tree)
+  unfolding is_minimum_spanning_forest_def is_spanning_forest_def
+  using connected_graph.maximal_connected_impl_connected valid_graph.subgraph_impl_connected
+  by auto
+
+definition is_connected :: "('v, 'w) graph \<Rightarrow> bool nres"
+  where "is_connected F \<equiv> do {
+    ASSERT (forest F);
+    let N = card (nodes F);
+    RETURN (card (edges F) = N - 1)
+  }"
+
+lemma is_connected_refine:
+  "(is_connected, (\<lambda>F. do {ASSERT (forest F); SPEC (\<lambda>conn. conn = connected_graph F)})) \<in> Id \<rightarrow> \<langle>Id\<rangle>nres_rel"
+  unfolding is_connected_def
+  apply(refine_vcg)
+  using forest.connected_by_number_of_edges
+  by auto
+
+definition is_connected_list :: "(nat \<times> int \<times> nat) list \<Rightarrow> (nat \<times> int \<times> nat) list \<Rightarrow> bool"
+  where "is_connected_list l f \<equiv>
+    let N = length (remdups ((map fst l) @ (map (snd o snd) l)))
+    in length f = N - 1"
+
+definition kruskal_tree2 :: "(nat \<times> int \<times> nat) list \<Rightarrow> (nat \<times> int \<times> nat) list option nres"
+  where "kruskal_tree2 l \<equiv> do {
+    spanning_forest \<leftarrow> kruskal5 l;
+    let connected = is_connected_list l spanning_forest;
+    if connected
+    then RETURN (Some spanning_forest)
+    else RETURN None
+  }"
+
+context Kruskal_list_nat
+begin
+
+lemma (in Kruskal_list_nat) is_connected_list_refine:
+  "(RETURN o (is_connected_list l), is_connected) \<in> lst_subgraph_rel G \<rightarrow> \<langle>Id\<rangle>nres_rel"
+  unfolding is_connected_list_def is_connected_def
+  apply(refine_rcg)
+  unfolding lst_subgraph_rel_def subgraph_of_lst_def graph_of_list_def lst_subgraph_invar_def
+  by (auto simp: in_br_conv distinct_card length_remdups_card_conv)
+
+theorem kruskal_tree2_refine:
+  "(kruskal_tree2 l, kruskal_tree1 G) \<in> \<langle>\<langle>lst_subgraph_rel G\<rangle>option_rel\<rangle>nres_rel"
+  unfolding kruskal_tree1_def kruskal_tree2_def
+  apply (refine_rcg)
+  using kruskal5_ref_spec[param_fo, THEN nres_relD]
+        is_connected_list_refine[FCOMP is_connected_refine, param_fo, THEN nres_relD]
+  apply auto
+  by fastforce+
+
+end
+
+lemma [sepref_import_param]: "(is_connected_list,is_connected_list)\<in>\<langle>Id\<times>\<^sub>rId\<times>\<^sub>rId\<rangle>list_rel \<rightarrow> \<langle>Id\<times>\<^sub>rId\<times>\<^sub>rId\<rangle>list_rel \<rightarrow> bool_rel"
+  by simp
+
+lemmas [sepref_fr_rules] = kruskal.refine
+
+sepref_definition kruskal_tree is
+  "kruskal_tree2" :: "(list_assn (nat_assn\<times>\<^sub>aint_assn\<times>\<^sub>anat_assn))\<^sup>k \<rightarrow>\<^sub>a option_assn (list_assn (nat_assn \<times>\<^sub>a int_assn \<times>\<^sub>a nat_assn))"
+  unfolding kruskal_tree2_def
+  by sepref
+
+context Kruskal_list_nat
+begin
+  lemma kruskal_tree3_refine: "(uncurry0 (kruskal_tree l), uncurry0 (kruskal_tree2 l))
+    \<in> unit_assn\<^sup>k \<rightarrow>\<^sub>a option_assn (list_assn (nat_assn \<times>\<^sub>a int_assn \<times>\<^sub>a nat_assn))"
+    using kruskal_tree.refine
+    unfolding list_assn_pure_conv prod_assn_pure_conv
+    unfolding hfref_def hn_refine_def pure_def hn_ctxt_def
+    by auto
+
+  lemmas kruskal_tree_ref_spec = kruskal_tree3_refine[FCOMP kruskal_tree2_refine[FCOMP kruskal_tree1_refine]]
+end
+
+lemma kruskal_tree_correct:
+  fixes l
+  defines "G \<equiv> graph_of_list l"
+  shows "<emp> kruskal_tree l <\<lambda>r. \<up>(r = None \<and> \<not> connected_graph G \<or> lst_subgraph_invar (the r) \<and> is_minimum_spanning_tree (subgraph_of_lst G (the r)) G)>\<^sub>t"
+proof -
+  interpret Kruskal "graph_of_list l"
+    apply unfold_locales
+    unfolding graph_of_list_def
+    by auto force
+
+  interpret Kruskal_list_nat l
+    by unfold_locales
+
+  show ?thesis
+    using kruskal_tree_ref_spec[to_hnr]
+    unfolding hn_refine_def lst_subgraph_rel_def kruskal_tree_spec_def
+    apply (auto simp: valid_graph_axioms)
+    apply (erule cons_post_rule)
+    unfolding option_assn_pure_conv option_rel_def
+    apply (sep_auto simp: pure_def in_br_conv G_def)
+    done
+qed
+
+section \<open>Code export\<close>
+
+export_code kruskal checking SML_imp
+export_code kruskal in SML_imp module_name Kruskal (*file "Kruskal.sml"*)
+
+export_code kruskal_tree checking SML_imp
+export_code kruskal_tree in SML_imp module_name Kruskal (*file "Kruskal.sml"*)
 
 
 ML_val \<open>
@@ -739,11 +871,12 @@ ML_val \<open>
   val import_list = map (fn (a,b,c) => (import_nat a, (import_int b, import_nat c)))
   val export_list = map (fn (a,(b,c)) => (export_nat a, export_int b, export_nat c))
 
-  fun kruskal l = @{code kruskal6} (import_list l) () |> export_list
+  fun kruskal l = @{code kruskal} (import_list l) () |> export_list
+  fun kruskal_tree l = @{code kruskal_tree} (import_list l) () |> Option.map export_list
 
   val result = kruskal [(1,~9,2),(2,~3,3),(3,~4,1)]
 
-
+  val result_tree = kruskal_tree [(1,~9,2),(2,~3,3),(3,~4,1),(4,3,3)]
 \<close>
 
 
