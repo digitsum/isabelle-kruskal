@@ -471,7 +471,7 @@ proof -
           by auto
         with valid_graph.is_path_undir_sym[OF add_edge_valid[OF valid_H]]
         show ?thesis
-          by auto
+          by blast
       qed
   qed
   then show ?thesis unfolding valid_union_find_graph_def by simp

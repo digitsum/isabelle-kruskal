@@ -12,6 +12,9 @@ fun is_path_undir :: "('v, 'w) graph \<Rightarrow> 'v \<Rightarrow> ('v,'w) path
 
 abbreviation "edges_connected G a b \<equiv> \<exists>p. is_path_undir G a p b"
 
+definition degree :: "('v, 'w) graph \<Rightarrow> 'v \<Rightarrow> nat" where
+  "degree G v = card {e\<in>edges G. fst e = v \<or> snd (snd e) = v}"
+
 locale forest = valid_graph G
   for G :: "('v,'w) graph" +
   assumes cycle_free:
@@ -135,11 +138,9 @@ begin
 
   lemma is_path_undir_sym:
     assumes "is_path_undir G v p v'"
-    shows "\<exists>p'. is_path_undir G v' p' v"
-  proof
-    from assms show "is_path_undir G v' (rev (map (\<lambda>(u, w, u'). (u', w, u)) p)) v"
-      by (induct p arbitrary: v) (auto simp: E_validD)
-  qed
+    shows "is_path_undir G v' (rev (map (\<lambda>(u, w, u'). (u', w, u)) p)) v"
+    using assms
+    by (induct p arbitrary: v) (auto simp: E_validD)
 
   lemma is_path_undir_subgraph:
     assumes "is_path_undir H x p y"
@@ -245,6 +246,21 @@ begin
     assumes "is_path_undir (delete_edge a b c G) x p y"
     shows "is_path_undir G x p y"
     using assms
+    by (induction p arbitrary: x y) auto
+
+  lemma subset_was_path:
+    assumes "is_path_undir H x p y"
+    assumes "edges H \<subseteq> E"
+    assumes "nodes H \<subseteq> V"
+    shows "is_path_undir G x p y"
+    using assms
+    by (induction p arbitrary: x y) auto
+
+  lemma delete_node_was_path:
+    assumes "is_path_undir (delete_node v G) x p y"
+    shows "is_path_undir G x p y"
+    using assms
+    unfolding delete_node_def
     by (induction p arbitrary: x y) auto
 
   lemma add_edge_preserve_subgraph:
@@ -564,6 +580,52 @@ begin
     unfolding connected_graph_def connected_graph_axioms_def maximal_connected_def
       subgraph_def
     by blast
+
+  lemma add_node_connected:
+    assumes "\<forall>a\<in>V - {v}. \<forall>b\<in>V - {v}. edges_connected G a b"
+    assumes "(v, w, v') \<in> E \<or> (v', w, v) \<in> E"
+    assumes "v \<noteq> v'"
+    shows "\<forall>a\<in>V. \<forall>b\<in>V. edges_connected G a b"
+  proof -
+    have "edges_connected G a b" if a: "a\<in>V" and b: "b\<in>V" for a b
+    proof (cases "a = v")
+      case True
+      show ?thesis
+      proof (cases "b = v")
+        case True
+        with \<open>a = v\<close> a is_path_undir_simps(1) show ?thesis
+          by blast
+      next
+        case False
+        from assms(2) have "v' \<in> V"
+          by (auto simp: E_validD)
+        with b assms(1) \<open>b \<noteq> v\<close> \<open>v \<noteq> v'\<close> have "edges_connected G v' b"
+          by blast
+        with assms(2) \<open>a = v\<close> is_path_undir.simps(2)[of G v v w v' _ b]
+        show ?thesis
+          by blast
+      qed
+    next
+      case False
+      show ?thesis
+      proof (cases "b = v")
+        case True
+        from assms(2) have "v' \<in> V"
+          by (auto simp: E_validD)
+        with a assms(1) \<open>a \<noteq> v\<close> \<open>v \<noteq> v'\<close> have "edges_connected G a v'"
+          by blast
+        with assms(2) \<open>b = v\<close> is_path_undir.simps(2)[of G v v w v' _ a]
+          is_path_undir_sym
+        show ?thesis
+          by blast
+      next
+        case False
+        with \<open>a \<noteq> v\<close> assms(1) a b show ?thesis
+          by simp
+      qed
+    qed
+    then show ?thesis by simp
+  qed
 end
 
 context connected_graph
@@ -704,7 +766,7 @@ begin
             with valid_graph.is_path_undir_sym[OF add_edge_valid[OF delete_edge_valid[OF valid_graph_axioms]] this]
               e12 e
             have "edges_connected (add_edge a w' b (delete_edge e1 w e2 G)) e1 e2"
-              by auto
+              by blast
             with thm1 show ?thesis
               using False edge_e12 by auto
           qed
@@ -749,29 +811,230 @@ begin
       unfolding forest_def forest_axioms_def by auto
   qed
 
-  lemma forest_delete_edge: "forest (delete_edge a w c G)"
+  lemma forest_subsets:
+    assumes "valid_graph H"
+    assumes "edges H \<subseteq> E"
+    assumes "nodes H \<subseteq> V"
+    shows "forest H"
   proof -
-    have "\<not> edges_connected (delete_edge v w' v' (delete_edge a w c G)) v v'"
-       if e: "(v,w',v')\<in> edges (delete_edge a w c G)" for v w' v'
+    have "\<not> edges_connected (delete_edge a w b H) a b"
+      if e: "(a, w, b)\<in>edges H" for a w b
     proof
-      assume asm: "edges_connected (delete_edge v w' v' (delete_edge a w c G)) v v'"
-      with swap_delete_edges[of v w' v' a w c G]
-      have asm': "edges_connected (delete_edge a w c (delete_edge v w' v' G)) v v'"
-        by simp
-      from cycle_free e
-      have "\<not> edges_connected (delete_edge v w' v' G) v v'"
-          unfolding delete_edge_def by auto
-      with valid_graph.delete_edge_was_path[OF delete_edge_valid[OF valid_graph_axioms]] asm'
-      show False
+      assume asm: "edges_connected (delete_edge a w b H) a b"
+      from \<open>edges H \<subseteq> E\<close> have edges: "edges (delete_edge a w b H) \<subseteq> edges (delete_edge a w b G)"
+        by auto
+      from \<open>nodes H \<subseteq> V\<close> have nodes: "nodes (delete_edge a w b H) \<subseteq> nodes (delete_edge a w b G)"
+        by auto
+      from asm valid_graph.subset_was_path[OF delete_edge_valid[OF valid_graph_axioms] _ edges nodes]
+      have "edges_connected (delete_edge a w b G) a b"
+        by auto
+      with cycle_free e \<open>edges H \<subseteq> E\<close> show False
         by blast
     qed
-    with cycle_free delete_edge_valid[OF valid_graph_axioms] show ?thesis
-      unfolding forest_def forest_axioms_def by blast
+    with assms(1) show ?thesis
+    unfolding forest_def forest_axioms_def
+    by auto
+  qed
+
+  lemma forest_delete_edge: "forest (delete_edge a w c G)"
+    using forest_subsets[OF delete_edge_valid[OF valid_graph_axioms]]
+    unfolding delete_edge_def
+    by auto
+
+  lemma forest_delete_node: "forest (delete_node n G)"
+    using forest_subsets[OF delete_node_valid[OF valid_graph_axioms]]
+    unfolding delete_node_def
+    by auto
+
+inductive path_from_edges where
+  "(v,w,v') \<in> E \<or> (v',w,v) \<in> E \<Longrightarrow> path_from_edges v [(v',w,v)]" |
+  "path_from_edges v es \<and> ((a',w',a) \<in> E \<or> (a',w',a) \<in> E)
+    \<and> es \<noteq> []
+    \<and> a = fst (hd es)
+    \<and> (a' = v \<or> a' \<notin> fst`set es \<union> snd`snd`set es)
+    \<Longrightarrow> path_from_edges v ((a',w',a)#es)"
+
+  lemma forest_no_cycle:
+    assumes "is_path_undir G v p v"
+    assumes "distinct (p@(map (\<lambda>(a,b,c). (c,b,a)) p))"
+    shows "p = []"
+    using assms cycle_free delete_edge_is_path apply (cases p) apply auto
+    sorry
+  (*proof (rule ccontr)
+    assume "p \<noteq> []"
+    then obtain a w b where "(a,w,b)\<in>set p"
+      using last_in_set prod_cases3 by metis
+    with is_path_undir_split_distinct[OF assms, of a w b]
+    obtain p' p'' u u' where
+       "is_path_undir G v p' u \<and>
+       is_path_undir G u' p'' v \<and>
+       (u \<in> {a, b} \<and> u' \<in> {a, b}) \<and>
+       (a, w, b) \<notin> set p' \<and>
+       (b, w, a) \<notin> set p' \<and> (a, w, b) \<notin> set p'' \<and> (b, w, a) \<notin> set p''"
+      by auto
+    with is_path_undir_split[of u' p'' p' u] is_path_undir_split[of v p' p'' v]
+      is_path_undir_sym[of u' "p''@p'" u]
+    have "\<exists>p. (is_path_undir G v p v \<or> is_path_undir G a p b) \<and>
+     (a, w, b) \<notin> set p \<and> (b, w, a) \<notin> set p"
+      by fastforce
+    show False
+      sorry
+  qed*)
+
+  lemma path_from_edges_valid:
+    assumes "path_from_edges v p"
+    shows "is_path_undir G (fst (hd p)) p v" "p \<noteq> []"
+    using assms
+    by (induct) (auto simp: E_validD)
+
+  lemma leaf_exists:
+    assumes "E \<noteq> {}"
+    assumes "finite E"
+    shows "\<exists>v\<in>V. degree G v = 1"
+  proof (rule ccontr)
+    assume asm: "\<not> (\<exists>v\<in>V. degree G v = 1)"
+    term "\<lambda>v. {v'. \<exists>p. fst (hd p) = v' \<and> path_from_edges v p}"
+    have "\<exists>v p. fst (hd p) = v \<and> path_from_edges v p"
+      sorry
+    with path_from_edges_valid obtain v p where
+      "is_path_undir G v p v" "p \<noteq> []"
+      by blast
+    with forest_no_cycle
+    show False
+      sorry
+    (*then have asm': "\<forall>v\<in>V. degree G v \<noteq> 1"
+      by blast
+    have "\<exists>v\<in>V. degree G v > 1"
+    proof (rule ccontr)
+      assume "\<not> (\<exists>v\<in>V. degree G v > 1)"
+      with asm have "\<forall>v\<in>V. degree G v = 0"
+        by fastforce
+      with E_valid \<open>finite E\<close> have "E = {}"
+        unfolding degree_def
+        by fastforce
+      with \<open>E \<noteq> {}\<close> show False
+        by simp
+    qed
+    then obtain v where v: "degree G v > 1"
+      by blast
+    then have "{e \<in> E. fst e = v \<or> snd (snd e) = v} \<noteq> {}"
+      unfolding degree_def
+      by force
+    then have "\<exists>e. e \<in> {e \<in> E. fst e = v \<or> snd (snd e) = v}"
+      by blast
+    then obtain a w a' where e: "(a, w, a') \<in> E \<and> (a = v \<or> a' = v)"
+      unfolding degree_def
+      using prod_cases3
+      by auto
+    then obtain v' where e': "v = a \<and> v' = a' \<or> v = a' \<and> v' = a"
+      by blast
+    with e have "path_from_edges v [(v',w,v)]"
+      sorry
+    from v have "\<exists>p. p\<noteq>[] \<and> is_path_undir G v p v"
+      sorry
+    then obtain p where p: "p\<noteq>[]" "is_path_undir G v p v"
+      by blast
+    with e have "edges_connected (delete_edge a w a' G) a a' \<or>
+      edges_connected (delete_edge a w a' G) v v"
+    proof (cases "(a,w,a')\<in>set p \<or> (a',w,a)\<in>set p")
+      case True
+      with is_path_undir_split_distinct[OF p(2) True]
+      show ?thesis
+        sorry
+    next
+      case False
+      with delete_edge_is_path[OF p(2)] show ?thesis
+        by blast
+    qed
+    with e cycle_free show False
+      sorry (*by auto*)*)
   qed
 
   lemma connected_by_number_of_edges:
-    "connected_graph G \<longleftrightarrow> card E = card V - 1"
-    sorry
+    assumes "finite V"
+    assumes  "card E = card V - 1"
+    shows "connected_graph G"
+  using assms forest_axioms
+  proof (induction n == "card (nodes G)" arbitrary: G)
+    case 0
+    then show ?case
+      unfolding forest_def connected_graph_def connected_graph_axioms_def
+        valid_graph_def
+      by auto
+  next
+    case (Suc n)
+    from forest.axioms(1)[OF \<open>forest G\<close>] have valid_G: "valid_graph G" .
+    show ?case
+    proof (cases "n = 0")
+      case True
+      with Suc(2) obtain v where "nodes G = {v}"
+        by (metis One_nat_def card_1_singletonE)
+      with valid_graph.is_path_undir_simps(1)[OF valid_G, of v]
+      have "edges_connected G v v"
+        by blast
+      with valid_G \<open>nodes G = {v}\<close> show ?thesis
+        unfolding connected_graph_def connected_graph_axioms_def
+        by auto
+    next
+      case False
+      with Suc(2,4) have "edges G \<noteq> {}"
+        by auto
+      from Suc(2,4) \<open>finite (nodes G)\<close> False card_infinite
+      have "finite (edges G)"
+        by fastforce
+      from forest.leaf_exists[OF \<open>forest G\<close> \<open>edges G \<noteq> {}\<close> this]
+      obtain v where v: "v\<in>nodes G" "degree G v = 1"
+        by blast
+      with card_1_singletonE
+      obtain e where e: "{e\<in>edges G. fst e = v \<or> snd (snd e) = v} = {e}"
+        unfolding degree_def
+        by blast
+      then have e': "e \<in> edges G" "fst e = v \<or> snd (snd e) = v"
+        by auto
+      with prod_cases3 obtain a w b where awb: "e = (a, w, b)"
+        by blast
+      with e' obtain v' where
+        v': "(v, w, v') \<in> edges G \<or> (v', w, v) \<in> edges G"
+        by auto
+      from valid_graph.is_path_undir_simps(1)[OF delete_edge_valid[OF valid_G], of v w v v] v(1)
+      have "edges_connected (delete_edge v w v G) v v"
+        unfolding delete_edge_def
+        by fastforce
+      from \<open>edges_connected (delete_edge v w v G) v v\<close> v' \<open>forest G\<close>
+      have v_neq_v': "v \<noteq> v'"
+        unfolding forest_def forest_axioms_def
+        by auto
+      let ?G = "delete_node v (delete_edge a w b G)"
+      from awb have edges_del_edge: "edges (delete_edge a w b G) = edges G - {e}"
+        by simp
+      with e have "{e\<in>edges (delete_edge a w b G). fst e = v \<or> snd (snd e) = v} = {}"
+        by blast
+      with edges_del_edge have "edges ?G = edges G - {e}"
+        unfolding delete_node_def
+        by auto
+      moreover have nodes: "nodes ?G = nodes G - {v}"
+        unfolding delete_node_def delete_edge_def
+        by auto
+      ultimately have card: "card (edges ?G) = card (nodes ?G) - 1"
+        using Suc(4) v(1) e'(1)
+        by (metis False One_nat_def Suc.hyps(2) Suc.prems(1) card_Diff_singleton card_infinite diff_Suc_1)
+      from card_Diff_singleton[OF Suc(3) v(1)] Suc(2) nodes
+      have "n = card (nodes ?G)"
+        by simp
+      moreover have "finite (nodes ?G)"
+        by (simp add: Suc(3) nodes)
+      moreover from forest.forest_delete_node[OF forest.forest_delete_edge[OF \<open>forest G\<close>]]
+        have "forest ?G" .
+      ultimately show ?thesis
+        using Suc(1)[OF _ _ card] valid_G nodes
+          valid_graph.add_node_connected[OF valid_G _ v' v_neq_v']
+          valid_graph.delete_edge_was_path[OF valid_G
+            valid_graph.delete_node_was_path[OF delete_edge_valid[OF valid_G]], of v a w b]
+        unfolding connected_graph_def connected_graph_axioms_def
+        by blast
+    qed
+  qed
+    
 end
 
 context finite_graph
