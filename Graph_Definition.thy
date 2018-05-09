@@ -371,55 +371,6 @@ begin
       by auto
   qed
 
-  lemma sub_spanning_forest_eq:
-    assumes "is_spanning_forest H G"
-    assumes "is_spanning_forest T G"
-    assumes "subgraph H T"
-    shows "H = T"
-  proof -
-    from \<open>is_spanning_forest H G\<close> \<open>is_spanning_forest T G\<close>
-    have valid_H: "valid_graph H" and valid_T: "valid_graph T"
-      and forest_H: "forest H" and forest_T: "forest T"
-      unfolding is_spanning_forest_def forest_def
-      by auto
-    have "edges T \<subseteq> edges H"
-    proof
-      fix x
-      assume asm: "x \<in> edges T"
-      show "x \<in> edges H"
-      proof (rule ccontr)
-        assume asm': "x \<notin> edges H"
-        from prod_cases3 obtain a w b where x: "x = (a, w, b)" .
-        with asm asm' \<open>subgraph H T\<close> have subgraph': "subgraph H (delete_edge a w b T)"
-          unfolding subgraph_def delete_edge_def
-          by auto
-        from valid_T have valid_delete_T: "valid_graph (delete_edge a w b T)"
-          by simp
-        from asm x E_validD \<open>is_spanning_forest T G\<close>
-        have "a \<in> V" "b \<in> V"
-          unfolding is_spanning_forest_def subgraph_def
-          by auto
-        from \<open>is_spanning_forest T G\<close> is_path_undir_subgraph
-          valid_graph.is_path_undir_simps(2)[OF valid_T]
-          asm x
-        have "\<exists>p. is_path_undir G a p b"
-          unfolding is_spanning_forest_def
-          by blast
-        with \<open>is_spanning_forest H G\<close> \<open>a\<in>V\<close> \<open>b\<in>V\<close>
-        obtain p where p:"is_path_undir H a p b"
-          unfolding is_spanning_forest_def maximal_connected_def
-          by blast
-        from valid_graph.is_path_undir_subgraph[OF valid_delete_T p subgraph']
-        have "is_path_undir (delete_edge a w b T) a p b"
-          by simp
-        with forest.cycle_free[OF forest_T] asm x show False
-          by auto
-      qed
-    qed
-    with assms show ?thesis
-      unfolding subgraph_def by simp
-  qed
-
   lemma add_edge_maximal_connected:
     assumes "maximal_connected H G"
     assumes "subgraph H G"
@@ -836,6 +787,13 @@ begin
     by auto
   qed
 
+  lemma subgraph_forest:
+    assumes "subgraph H G"
+    shows "forest H"
+    using assms forest_subsets valid_subgraph
+    unfolding subgraph_def
+    by simp
+
   lemma forest_delete_edge: "forest (delete_edge a w c G)"
     using forest_subsets[OF delete_edge_valid[OF valid_graph_axioms]]
     unfolding delete_edge_def
@@ -1163,6 +1121,58 @@ begin
     then show ?thesis
       unfolding is_minimum_spanning_forest_def is_optimal_forest_def
       by blast
+  qed
+end
+
+context valid_graph
+begin
+  lemma sub_spanning_forest_eq:
+    assumes "maximal_connected H G"
+    assumes "is_spanning_forest T G"
+    assumes "subgraph H T"
+    shows "H = T"
+  proof -
+    from \<open>is_spanning_forest T G\<close> forest.subgraph_forest[OF _ \<open>subgraph H T\<close>]
+    have valid_H: "valid_graph H" and valid_T: "valid_graph T"
+      and forest_H: "forest H" and forest_T: "forest T"
+      unfolding is_spanning_forest_def forest_def
+      by auto
+    have "edges T \<subseteq> edges H"
+    proof
+      fix x
+      assume asm: "x \<in> edges T"
+      show "x \<in> edges H"
+      proof (rule ccontr)
+        assume asm': "x \<notin> edges H"
+        from prod_cases3 obtain a w b where x: "x = (a, w, b)" .
+        with asm asm' \<open>subgraph H T\<close> have subgraph': "subgraph H (delete_edge a w b T)"
+          unfolding subgraph_def delete_edge_def
+          by auto
+        from valid_T have valid_delete_T: "valid_graph (delete_edge a w b T)"
+          by simp
+        from asm x E_validD \<open>is_spanning_forest T G\<close>
+        have "a \<in> V" "b \<in> V"
+          unfolding is_spanning_forest_def subgraph_def
+          by auto
+        from \<open>is_spanning_forest T G\<close> is_path_undir_subgraph
+          valid_graph.is_path_undir_simps(2)[OF valid_T]
+          asm x
+        have "\<exists>p. is_path_undir G a p b"
+          unfolding is_spanning_forest_def
+          by blast
+        with \<open>maximal_connected H G\<close> \<open>a\<in>V\<close> \<open>b\<in>V\<close>
+        obtain p where p:"is_path_undir H a p b"
+          unfolding is_spanning_forest_def maximal_connected_def
+          by blast
+        from valid_graph.is_path_undir_subgraph[OF valid_delete_T p subgraph']
+        have "is_path_undir (delete_edge a w b T) a p b"
+          by simp
+        with forest.cycle_free[OF forest_T] asm x show False
+          by auto
+      qed
+    qed
+    with assms show ?thesis
+      unfolding subgraph_def by simp
   qed
 end
 
