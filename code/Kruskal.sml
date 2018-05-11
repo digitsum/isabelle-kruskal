@@ -75,6 +75,10 @@ end; (*struct Bits_Integer*)
 structure Kruskal : sig
   type int
   type nat
+  val integer_of_int : int -> IntInf.int
+  val Int_of_integer : IntInf.int -> int
+  val integer_of_nat : nat -> IntInf.int
+  val nat_of_integer : IntInf.int -> nat
   val kruskal : (nat * (int * nat)) list -> (unit -> ((nat * (int * nat)) list))
 end = struct
 

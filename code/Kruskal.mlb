@@ -4,11 +4,10 @@ $(SML_LIB)/basis/mlton.mlb
 local
     Unsynchronized.sml
     ann "nonexhaustiveMatch ignore" in
-      Prpu_Export.sml
+      Kruskal.sml
     end
 in
-    structure Prpu
-    structure stat
+    structure Kruskal
 end
 
-Prpu_Benchmark.sml
+Kruskal_cli.sml
