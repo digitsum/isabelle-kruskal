@@ -1,5 +1,5 @@
 theory SeprefUF
-imports Refine_Imperative_HOL.IICF "Separation_Logic_Imperative_HOL.Union_Find"
+imports Refine_Imperative_HOL.Sepref "Separation_Logic_Imperative_HOL.Union_Find"
 begin
 
   type_synonym 'a per = "('a\<times>'a) set"

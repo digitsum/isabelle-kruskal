@@ -733,7 +733,7 @@ section \<open>Kruskal tree\<close>
 
 definition kruskal_tree_spec :: "('v, 'w::weight) graph \<Rightarrow> ('v, 'w) graph option nres"
   where "kruskal_tree_spec G \<equiv> do {
-    ASSERT (valid_graph G);
+    ASSERT (valid_graph G \<and> finite (nodes G) \<and> finite (edges G));
     SPEC (\<lambda>F.
       if connected_graph G
       then \<exists>F'. F = Some F' \<and> is_minimum_spanning_tree F' G
@@ -742,9 +742,9 @@ definition kruskal_tree_spec :: "('v, 'w::weight) graph \<Rightarrow> ('v, 'w) g
 
 definition kruskal_tree1 :: "('v, 'w::weight) graph \<Rightarrow> ('v, 'w) graph option nres"
   where "kruskal_tree1 G \<equiv> do {
-    ASSERT (valid_graph G);
+    ASSERT (valid_graph G \<and> finite (nodes G) \<and> finite (edges G));
     spanning_forest \<leftarrow> SPEC (\<lambda>F. is_minimum_spanning_forest F G);
-    ASSERT (forest spanning_forest);
+    ASSERT (forest spanning_forest \<and> finite (nodes spanning_forest));
     connected \<leftarrow> SPEC (\<lambda>conn. conn = connected_graph spanning_forest);
     if connected
     then RETURN (Some spanning_forest)
@@ -758,18 +758,24 @@ theorem kruskal_tree1_refine:
   apply (auto simp: minimum_spanning_forest_impl_tree)
   unfolding is_minimum_spanning_forest_def is_spanning_forest_def
   using connected_graph.maximal_connected_impl_connected valid_graph.subgraph_impl_connected
-  by auto
+  by (auto simp: subgraph_def)
+
+definition is_connected_spec :: "('v, 'w) graph \<Rightarrow> bool nres"
+  where "is_connected_spec F \<equiv> do {
+    ASSERT (forest F \<and> finite (nodes F) \<and> finite (edges F));
+    SPEC (\<lambda>conn. conn = connected_graph F)
+  }"
 
 definition is_connected :: "('v, 'w) graph \<Rightarrow> bool nres"
   where "is_connected F \<equiv> do {
-    ASSERT (forest F);
+    ASSERT (forest F \<and> finite (nodes F) \<and> finite (edges F));
     let N = card (nodes F);
     RETURN (card (edges F) = N - 1)
   }"
 
 lemma is_connected_refine:
-  "(is_connected, (\<lambda>F. do {ASSERT (forest F); SPEC (\<lambda>conn. conn = connected_graph F)})) \<in> Id \<rightarrow> \<langle>Id\<rangle>nres_rel"
-  unfolding is_connected_def
+  "(is_connected, is_connected_spec) \<in> Id \<rightarrow> \<langle>Id\<rangle>nres_rel"
+  unfolding is_connected_def is_connected_spec_def
   apply(refine_vcg)
   using forest.connected_by_number_of_edges
   by auto
@@ -804,7 +810,8 @@ theorem kruskal_tree2_refine:
   apply (refine_rcg)
   using kruskal5_ref_spec[param_fo, THEN nres_relD]
         is_connected_list_refine[FCOMP is_connected_refine, param_fo, THEN nres_relD]
-  apply auto
+  unfolding lst_subgraph_rel_def is_connected_spec_def subgraph_of_lst_def
+  apply (auto simp: in_br_conv)
   by fastforce+
 
 end
@@ -844,7 +851,11 @@ proof -
   interpret Kruskal_list_nat l
     by unfold_locales
 
-  show ?thesis
+  have "finite V" "finite E"
+    unfolding graph_of_list_def
+    by auto
+
+  then show ?thesis
     using kruskal_tree_ref_spec[to_hnr]
     unfolding hn_refine_def lst_subgraph_rel_def kruskal_tree_spec_def
     apply (auto simp: valid_graph_axioms)
@@ -860,7 +871,7 @@ export_code kruskal checking SML_imp
 export_code kruskal in SML_imp module_name Kruskal (*file "Kruskal.sml"*)
 
 export_code kruskal_tree checking SML_imp
-export_code kruskal_tree in SML_imp module_name Kruskal (*file "Kruskal.sml"*)
+export_code kruskal_tree in SML_imp module_name Kruskal (*file "Kruskal_tree.sml"*)
 
 
 ML_val \<open>
@@ -876,7 +887,7 @@ ML_val \<open>
 
   val result = kruskal [(1,~9,2),(2,~3,3),(3,~4,1)]
 
-  val result_tree = kruskal_tree [(1,~9,2),(2,~3,3),(3,~4,1),(4,3,3)]
+  val result_tree = kruskal_tree [(1,~9,2),(2,~3,3),(3,~4,1),(4,3,5)]
 \<close>
 
 
