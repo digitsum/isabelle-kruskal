@@ -72,9 +72,13 @@ fun test_bit x n =
 
 end; (*struct Bits_Integer*)
 
-structure Kruskal : sig
+structure Kruskal_tree : sig
   type int
   type nat
+  val integer_of_int : int -> IntInf.int
+  val Int_of_integer : IntInf.int -> int
+  val integer_of_nat : nat -> IntInf.int
+  val nat_of_integer : IntInf.int -> nat
   val kruskal_tree :
     (nat * (int * nat)) list -> (unit -> (((nat * (int * nat)) list) option))
 end = struct
@@ -482,4 +486,4 @@ fun kruskal_tree x =
                      end)
     x;
 
-end; (*struct Kruskal*)
+end; (*struct Kruskal_tree*)

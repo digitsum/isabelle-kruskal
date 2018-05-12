@@ -1,4 +1,4 @@
-open Kruskal
+open Kruskal_tree
 
 exception FAILED
 
@@ -62,13 +62,18 @@ fun main () = let
   val args = CommandLine.arguments ();
 
   fun perform G = let
-    val res_list = kruskal G ()
+    val res = kruskal_tree G ()
   in
     print("Input graph:\n");
     print_graph G;
-    print("Minimum spanning forest:\n");
-    print_graph res_list;
-    print("Number of edges: " ^ IntInf.toString (length res_list) ^ "\n");
+    print("Minimum spanning tree:\n");
+    case res of
+      NONE =>
+        print ("There is no spanning tree, since the graph is not connected.\n")
+    | SOME res_list => (
+        print_graph res_list;
+        print("Number of edges: " ^ IntInf.toString (length res_list) ^ "\n")
+      );
     ()
   end
 
@@ -79,7 +84,7 @@ in
     in
       perform G
     end
-    | _ => print "Usage: Kruskal <file-name>"
+    | _ => print "Usage: Kruskal_tree <file-name>"
 end
 
 val _ = if MLton.isMLton then main() else ()

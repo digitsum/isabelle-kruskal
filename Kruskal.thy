@@ -871,7 +871,7 @@ export_code kruskal checking SML_imp
 export_code kruskal in SML_imp module_name Kruskal (*file "Kruskal.sml"*)
 
 export_code kruskal_tree checking SML_imp
-export_code kruskal_tree in SML_imp module_name Kruskal (*file "Kruskal_tree.sml"*)
+export_code kruskal_tree in SML_imp module_name Kruskal_tree (*file "Kruskal_tree.sml"*)
 
 
 ML_val \<open>
