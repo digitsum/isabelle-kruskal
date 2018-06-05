@@ -36,7 +36,7 @@ begin
 
   definition per_supset_rel :: "('a per \<times> 'a per) set" where
     "per_supset_rel
-      \<equiv> {(p1,p2). p1 \<inter> Domain p2 \<times> Domain p2 = p2 \<and> p1 \<inter> -(Domain p2 \<times> Domain p2) \<subseteq> Id}"
+      \<equiv> {(p1,p2). p1 \<inter> Domain p2 \<times> Domain p2 = p2 \<and> p1 - (Domain p2 \<times> Domain p2) \<subseteq> Id}"
 
   lemma per_supset_rel_dom: "(p1, p2) \<in> per_supset_rel \<Longrightarrow> Domain p1 \<supseteq> Domain p2"
     by (auto simp: per_supset_rel_def)

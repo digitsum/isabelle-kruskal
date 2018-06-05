@@ -347,32 +347,29 @@ begin
     from valid_subgraph[OF \<open>subgraph H G\<close>]
     have valid_H: "valid_graph H" .
     have "(edges_connected G v v') \<longrightarrow> (edges_connected H v v')" (is "?lhs \<longrightarrow> ?rhs")
-      if v: "v\<in>V" and v': "v'\<in>V" for v v'
+      if "v\<in>V" and "v'\<in>V" for v v'
     proof
       assume ?lhs
       then obtain p where "is_path_undir G v p v'"
         by blast
-      with v show ?rhs
+      then show ?rhs
       proof (induction p arbitrary: v v')
         case Nil
         with subgraph_node[OF assms(1)] show ?case
           by (metis is_path_undir.simps(1))
       next
         case (Cons e p)
-        then show ?case
-        proof (cases e)
-          case (fields a w b)
-          with assms Cons valid_graph.is_path_undir_sym[OF valid_H, of b _ a]
-          obtain p' where p': "is_path_undir H a p' b"
-            by fastforce
-          from assms fields Cons.prems Cons.IH[of b v']
-          obtain p'' where "is_path_undir H b p'' v'"
-            unfolding subgraph_def by auto
-          with Cons.prems fields assms p' valid_graph.is_path_undir_split[OF valid_H]
-            have "is_path_undir H v (p'@p'') v'"
-              by auto
-          then show ?thesis ..
-        qed
+        from prod_cases3 obtain a w b where awb: "e = (a, w, b)" .
+        with assms Cons.prems valid_graph.is_path_undir_sym[OF valid_H, of b _ a]
+        obtain p' where p': "is_path_undir H a p' b"
+          by fastforce
+        from assms awb Cons.prems Cons.IH[of b v']
+        obtain p'' where "is_path_undir H b p'' v'"
+          unfolding subgraph_def by auto
+        with Cons.prems awb assms p' valid_graph.is_path_undir_split[OF valid_H]
+          have "is_path_undir H v (p'@p'') v'"
+            by auto
+        then show ?case ..
       qed
     qed
     with assms show ?thesis
@@ -460,8 +457,7 @@ begin
     assumes "connected_graph H"
     assumes subgraph: "subgraph H G"
     shows "maximal_connected H G"
-    using assms valid_subgraph[OF subgraph]
-      is_path_undir_subgraph[OF _ subgraph]
+    using assms
     unfolding connected_graph_def connected_graph_axioms_def maximal_connected_def
       subgraph_def
     by blast
@@ -737,19 +733,19 @@ begin
 
   lemma forest_add_edge:
     assumes "a \<in> V"
-    assumes "c \<in> V"
-    assumes "\<not> edges_connected G a c"
-    shows "forest (add_edge a w c G)"
+    assumes "b \<in> V"
+    assumes "\<not> edges_connected G a b"
+    shows "forest (add_edge a w b G)"
   proof -
-    from assms(3) have "\<not> is_path_undir G a [(a, w, c)] c"
+    from assms(3) have "\<not> is_path_undir G a [(a, w, b)] b"
       by blast
-    with assms(2) have awc: "(a, w, c) \<notin> E \<and> (c, w, a) \<notin> E"
+    with assms(2) have awb: "(a, w, b) \<notin> E \<and> (b, w, a) \<notin> E"
       by auto
-    have "\<not> edges_connected (delete_edge v w' v' (add_edge a w c G)) v v'"
-       if e: "(v,w',v')\<in> edges (add_edge a w c G)" for v w' v'
-    proof (cases "(v,w',v') = (a, w, c)")
+    have "\<not> edges_connected (delete_edge v w' v' (add_edge a w b G)) v v'"
+       if e: "(v,w',v')\<in> edges (add_edge a w b G)" for v w' v'
+    proof (cases "(v,w',v') = (a, w, b)")
       case True
-      with assms awc delete_add_edge[of a G c w]
+      with assms awb delete_add_edge[of a G b w]
       show ?thesis by simp
     next
       case False
@@ -757,11 +753,11 @@ begin
         by auto
       show ?thesis
       proof
-        assume asm: "edges_connected (delete_edge v w' v' (add_edge a w c G)) v v'"
+        assume asm: "edges_connected (delete_edge v w' v' (add_edge a w b G)) v v'"
         with swap_delete_add_edge[OF False, of G]
-          valid_graph.swap_edges[OF delete_edge_valid[OF valid_graph_axioms], of a w c v w' v' v v' w']
+          valid_graph.swap_edges[OF delete_edge_valid[OF valid_graph_axioms], of a w b v w' v' v v' w']
           add_delete_edge[OF e'] cycle_free assms(1,2) e'
-        have "edges_connected G a c"
+        have "edges_connected G a b"
           by force
         with assms show False
           by simp
@@ -1458,9 +1454,9 @@ begin
   proof -
     let ?weights = "{edge_weight F |F. is_spanning_forest F G}"
     from spanning_forest_exists
-    obtain T where "is_spanning_forest T G"
+    obtain F where "is_spanning_forest F G"
       by auto
-    then have non_empty: "edge_weight T \<in> ?weights"
+    then have non_empty: "edge_weight F \<in> ?weights"
       by auto
     from finite_subgraphs have finite: "finite ?weights"
       unfolding is_spanning_forest_def
@@ -1469,7 +1465,7 @@ begin
       by simp
     moreover from finite non_empty have "Min ?weights \<in> ?weights"
       using Min_in by blast
-    ultimately obtain T' where "(\<forall>w \<in> ?weights. edge_weight T' \<le> w) \<and> is_spanning_forest T' G"
+    ultimately obtain F' where "(\<forall>w \<in> ?weights. edge_weight F' \<le> w) \<and> is_spanning_forest F' G"
       by auto
     then show ?thesis
       unfolding is_minimum_spanning_forest_def is_optimal_forest_def
@@ -1480,14 +1476,13 @@ end
 context valid_graph
 begin
   lemma sub_spanning_forest_eq:
-    assumes "maximal_connected H G"
+    assumes "\<forall>(a, w, b)\<in>E. edges_connected H a b"
     assumes "is_spanning_forest T G"
     assumes "subgraph H T"
     shows "H = T"
   proof -
-    from \<open>is_spanning_forest T G\<close> forest.subgraph_forest[OF _ \<open>subgraph H T\<close>]
-    have valid_H: "valid_graph H" and valid_T: "valid_graph T"
-      and forest_H: "forest H" and forest_T: "forest T"
+    from \<open>is_spanning_forest T G\<close>
+    have valid_T: "valid_graph T" and forest_T: "forest T"
       unfolding is_spanning_forest_def forest_def
       by auto
     have "edges T \<subseteq> edges H"
@@ -1501,25 +1496,16 @@ begin
         with asm asm' \<open>subgraph H T\<close> have subgraph': "subgraph H (delete_edge a w b T)"
           unfolding subgraph_def delete_edge_def
           by auto
-        from valid_T have valid_delete_T: "valid_graph (delete_edge a w b T)"
-          by simp
-        from asm x E_validD \<open>is_spanning_forest T G\<close>
-        have "a \<in> V" "b \<in> V"
+        from \<open>is_spanning_forest T G\<close> asm x
+        have "(a,w,b) \<in> E"
           unfolding is_spanning_forest_def subgraph_def
-          by auto
-        from \<open>is_spanning_forest T G\<close> is_path_undir_subgraph
-          valid_graph.is_path_undir_simps(2)[OF valid_T]
-          asm x
-        have "\<exists>p. is_path_undir G a p b"
-          unfolding is_spanning_forest_def
           by blast
-        with \<open>maximal_connected H G\<close> \<open>a\<in>V\<close> \<open>b\<in>V\<close>
+        with \<open>\<forall>(a, w, b)\<in>E. edges_connected H a b\<close>
         obtain p where p:"is_path_undir H a p b"
-          unfolding is_spanning_forest_def maximal_connected_def
+          unfolding maximal_connected_def
           by blast
-        from valid_graph.is_path_undir_subgraph[OF valid_delete_T p subgraph']
-        have "is_path_undir (delete_edge a w b T) a p b"
-          by simp
+        from valid_graph.is_path_undir_subgraph[OF delete_edge_valid[OF valid_T] p subgraph']
+        have "is_path_undir (delete_edge a w b T) a p b" .
         with forest.cycle_free[OF forest_T] asm x show False
           by auto
       qed
