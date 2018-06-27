@@ -7,7 +7,7 @@ begin
 
 definition corresponding_union_find :: "'v per \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool"
   where "corresponding_union_find uf H \<equiv> (\<forall>a\<in>nodes H. \<forall>b\<in>nodes H.
-      per_compare uf a b \<longleftrightarrow> (edges_connected H a b))"
+      per_compare uf a b \<longleftrightarrow> (nodes_connected H a b))"
 
 definition "uf_graph_invar uf_H \<equiv> case uf_H of (uf, H) \<Rightarrow>
     part_equiv uf \<and>
@@ -54,19 +54,19 @@ section \<open>Kruskal 0\<close>
 definition empty_forest :: "('v, 'w) graph"
   where "empty_forest \<equiv> \<lparr> nodes = V, edges = {} \<rparr>"
 
-definition previous_edges_connected :: "('v, 'w) graph \<Rightarrow> ('v \<times> 'w \<times> 'v) set \<Rightarrow> bool"
-  where "previous_edges_connected H E' \<equiv>
-    (\<forall>(a, w, b)\<in>E - E'. edges_connected H a b)"
+definition previous_nodes_connected :: "('v, 'w) graph \<Rightarrow> ('v \<times> 'w \<times> 'v) set \<Rightarrow> bool"
+  where "previous_nodes_connected H E' \<equiv>
+    (\<forall>(a, w, b)\<in>E - E'. nodes_connected H a b)"
 
 definition exists_min_spanning_forest :: "('v, 'w) graph \<Rightarrow> bool"
   where "exists_min_spanning_forest H \<equiv>
-    (\<exists>T. subgraph H T \<and> is_minimum_spanning_forest T G)"
+    (\<exists>T. subgraph H T \<and> minimum_spanning_forest T G)"
 
 definition loop_invar_kruskal :: "('v \<times> 'w \<times> 'v) set \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool"
   where "loop_invar_kruskal E' H \<equiv>
     forest H \<and>
     subgraph H G \<and>
-    previous_edges_connected H E' \<and>
+    previous_nodes_connected H E' \<and>
     exists_min_spanning_forest H"
 
 definition kruskal0 :: "('v, 'w) graph nres"
@@ -76,7 +76,7 @@ definition kruskal0 :: "('v, 'w) graph nres"
       (\<lambda>(a, w, b) H. do {
         ASSERT (subgraph H G);
         ASSERT (a\<in>V \<and> b\<in>V);
-        if (edges_connected H a b)
+        if (nodes_connected H a b)
         then
           RETURN H
         else do {
@@ -93,11 +93,11 @@ lemma empty_forest_valid: "valid_graph empty_forest"
 
 lemma empty_exists_min_spanning_forest: "exists_min_spanning_forest empty_forest"
 proof -
-  from minimum_spanning_forest_exists obtain T where "is_minimum_spanning_forest T G"
+  from minimum_spanning_forest_exists obtain T where "minimum_spanning_forest T G"
     by auto
   moreover from this have "subgraph empty_forest T"
-    unfolding subgraph_def empty_forest_def is_minimum_spanning_forest_def
-      is_spanning_forest_def
+    unfolding subgraph_def empty_forest_def minimum_spanning_forest_def
+      spanning_forest_def
     by simp
   ultimately show ?thesis
     unfolding exists_min_spanning_forest_def
@@ -107,7 +107,7 @@ qed
 lemma loop_invar_kruskal_empty: "loop_invar_kruskal E empty_forest"
   using empty_forest_valid empty_exists_min_spanning_forest
   unfolding loop_invar_kruskal_def empty_forest_def forest_def
-    forest_axioms_def subgraph_def previous_edges_connected_def
+    forest_axioms_def subgraph_def previous_nodes_connected_def
   by auto
 
 lemma loop_invar_kruskal_valid_graph:
@@ -126,7 +126,7 @@ lemma loop_invar_kruskal_subgraph:
 lemma loop_invar_kruskal_edge_not_in_graph:
   assumes invar: "loop_invar_kruskal (insert (a, w, b) E') H"
   assumes "(a, w, b) \<in> E"
-  assumes "\<not> edges_connected H a b"
+  assumes "\<not> nodes_connected H a b"
   shows "(a, w, b) \<notin> edges H"
 proof -
   from assms have "\<not> is_path_undir H a [(a, w, b)] b"
@@ -137,21 +137,21 @@ proof -
     by auto
 qed
 
-lemma preserve_previous_edges_connected_no_add:
-  assumes "previous_edges_connected H (insert (a, w, b) E')"
-  assumes "edges_connected H a b"
-  shows "previous_edges_connected H E'"
+lemma preserve_previous_nodes_connected_no_add:
+  assumes "previous_nodes_connected H (insert (a, w, b) E')"
+  assumes "nodes_connected H a b"
+  shows "previous_nodes_connected H E'"
   using assms
-  unfolding previous_edges_connected_def
+  unfolding previous_nodes_connected_def
   by blast
 
-lemma preserve_previous_edges_connected_add:
-  assumes "previous_edges_connected H (insert (a, w, b) E')"
+lemma preserve_previous_nodes_connected_add:
+  assumes "previous_nodes_connected H (insert (a, w, b) E')"
   assumes "valid_graph H"
-  shows "previous_edges_connected (add_edge a w b H) E'"
+  shows "previous_nodes_connected (add_edge a w b H) E'"
   using assms
 proof -
-  have "edges_connected (add_edge a w b H) v v'"
+  have "nodes_connected (add_edge a w b H) v v'"
     if e: "(v, w', v')\<in>E - E'" for v w' v'
   proof (cases "(v, w', v') = (a, w, b)")
     case True
@@ -161,30 +161,30 @@ proof -
     case False
     with assms(1) e valid_graph.add_edge_is_path[OF \<open>valid_graph H\<close>]
     show ?thesis
-      unfolding previous_edges_connected_def
+      unfolding previous_nodes_connected_def
       by blast
   qed
   then show ?thesis
-    unfolding previous_edges_connected_def
+    unfolding previous_nodes_connected_def
     by auto
 qed
 
 lemma exists_min_spanning_forest_add:
   assumes "exists_min_spanning_forest H"
-  assumes "previous_edges_connected H (insert (a, w, b) (set l2))"
+  assumes "previous_nodes_connected H (insert (a, w, b) (set l2))"
   assumes "subgraph H G"
   assumes "(a,w,b) \<in> E"
-  assumes "\<not> edges_connected H a b"
+  assumes "\<not> nodes_connected H a b"
   assumes "sorted_by_rel edges_less_eq (l1 @ (a, w, b) # l2)"
   shows "exists_min_spanning_forest (add_edge a w b H)"
 proof -
   from \<open>exists_min_spanning_forest H\<close> obtain F where subgraph_H_F: "subgraph H F"
-      and msf_F: "is_minimum_spanning_forest F G"
+      and msf_F: "minimum_spanning_forest F G"
       and valid_F: "valid_graph F" and forest_F: "forest F"
       and maximal_connected_F: "maximal_connected F G"
       and subgraph_F: "subgraph F G"
-    unfolding exists_min_spanning_forest_def is_minimum_spanning_forest_def
-      is_spanning_forest_def forest_def
+    unfolding exists_min_spanning_forest_def minimum_spanning_forest_def
+      spanning_forest_def forest_def
     by blast
   from subgraph_F finite_E have finite_F: "finite (edges F)"
     unfolding subgraph_def by (auto simp: finite_subset)
@@ -207,13 +207,13 @@ proof -
   next
     case False
     from maximal_connected_F \<open>(a,w,b)\<in>E\<close> is_path_undir_simps(2)[of a w b]
-    obtain p where p: "is_path_undir F a p b"
+    have  "nodes_connected F a b"
       unfolding maximal_connected_def
       by (meson E_validD)
-    with forest.delete_edge_from_path[OF forest_F _ subgraph_H_F \<open>\<not> edges_connected H a b\<close>]
+    from forest.delete_edge_from_path[OF forest_F this subgraph_H_F \<open>\<not> nodes_connected H a b\<close>]
     obtain x w' y where xy: "(x, w', y) \<in> edges F" "(x, w', y) \<notin> edges H" and
-      not_connected: "\<not> edges_connected (delete_edge x w' y F) a b" and
-      connected_xy: "edges_connected (add_edge a w b (delete_edge x w' y F)) x y"
+      not_connected: "\<not> nodes_connected (delete_edge x w' y F) a b" and
+      connected_xy: "nodes_connected (add_edge a w b (delete_edge x w' y F)) x y"
       by blast
     obtain F' where F': "F' = add_edge a w b (delete_edge x w' y F)"
       by blast
@@ -234,17 +234,17 @@ proof -
     from subgraph_H_F xy have subgraph_H_delete_T: "subgraph H (delete_edge x w' y F)"
       unfolding subgraph_def delete_edge_def
       by auto
-    have "\<not> edges_connected H x y"
+    have "\<not> nodes_connected H x y"
     proof
-      assume asm: "edges_connected H x y"
+      assume asm: "nodes_connected H x y"
       from forest.cycle_free[OF forest_F] xy(1)
-        have contr: "\<not> edges_connected (delete_edge x w' y F) x y"
+        have contr: "\<not> nodes_connected (delete_edge x w' y F) x y"
         by auto
       with asm valid_graph.is_path_undir_subgraph[OF valid_delete_F _ subgraph_H_delete_T]
       show False by blast
     qed
     with assms(2) ab_neq_xy have "(x, w', y) \<notin> E - (set l2)"
-      unfolding previous_edges_connected_def by blast
+      unfolding previous_nodes_connected_def by blast
     moreover from xy(1) subgraph_F have "(x, w', y) \<in> E"
       unfolding subgraph_def
       by auto
@@ -274,30 +274,30 @@ proof -
         add_edge_preserve_subgraph[OF subgraph_F \<open>(a,w,b)\<in>E\<close>]]
       have "maximal_connected F' G"
       unfolding subgraph_def by metis
-    moreover from improvement msf_F have "is_optimal_forest F' G"
-      unfolding is_minimum_spanning_forest_def is_optimal_forest_def
+    moreover from improvement msf_F have "optimal_forest F' G"
+      unfolding minimum_spanning_forest_def optimal_forest_def
       by auto
     ultimately show ?thesis using subgraph_F'
-      unfolding exists_min_spanning_forest_def is_minimum_spanning_forest_def
-        is_spanning_forest_def
+      unfolding exists_min_spanning_forest_def minimum_spanning_forest_def
+        spanning_forest_def
       by auto
   qed
 qed
 
 lemma union_preserves_forest:
   assumes "forest H"
-  assumes "\<not> edges_connected H a b"
+  assumes "\<not> nodes_connected H a b"
   assumes "subgraph H G"
   assumes "a \<in> V"
   assumes "b \<in> V"
   shows "forest (add_edge a w b H)"
-  using forest.forest_add_edge[OF \<open>forest H\<close> _ _ \<open>\<not>edges_connected H a b\<close>]
+  using forest.forest_add_edge[OF \<open>forest H\<close> _ _ \<open>\<not>nodes_connected H a b\<close>]
     subgraph_node[OF \<open>subgraph H G\<close>] \<open>a\<in>V\<close> \<open>b\<in>V\<close>
   by simp
 
 lemma union_preserves_loop_invar:
   assumes "loop_invar_kruskal (insert (a, w, b) (set l2)) H"
-  assumes "\<not> edges_connected H a b"
+  assumes "\<not> nodes_connected H a b"
   assumes "insert (a, w, b) (set l1 \<union> set l2) = E"
   assumes "sorted_by_rel edges_less_eq (l1 @ (a, w, b) # l2)"
   shows "loop_invar_kruskal (set l2) (add_edge a w b H)"
@@ -306,31 +306,31 @@ lemma union_preserves_loop_invar:
   apply (auto simp: add_edge_preserve_subgraph)
   apply (meson E_validD union_preserves_forest)
   apply (auto simp: valid_subgraph E_validD exists_min_spanning_forest_add
-          dest: preserve_previous_edges_connected_add)
+          dest: preserve_previous_nodes_connected_add)
   done
 
 lemma same_component_preserves_loop_invar:
   assumes "loop_invar_kruskal (insert (a, w, b) E') H"
-  assumes "edges_connected H a b"
+  assumes "nodes_connected H a b"
   shows "loop_invar_kruskal E' H"
-  using assms preserve_previous_edges_connected_no_add
+  using assms preserve_previous_nodes_connected_no_add
   unfolding loop_invar_kruskal_def
   by blast
 
 lemma loop_invar_kruskal_final:
   assumes "loop_invar_kruskal {} H"
-  shows "is_minimum_spanning_forest H G"
+  shows "minimum_spanning_forest H G"
 proof -
-  from assms obtain T where T: "subgraph H T" "is_minimum_spanning_forest T G"
+  from assms obtain T where T: "subgraph H T" "minimum_spanning_forest T G"
     unfolding loop_invar_kruskal_def exists_min_spanning_forest_def by auto
   with assms sub_spanning_forest_eq[of H T]
   show ?thesis
-    unfolding loop_invar_kruskal_def is_minimum_spanning_forest_def
-      is_spanning_forest_def previous_edges_connected_def
+    unfolding loop_invar_kruskal_def minimum_spanning_forest_def
+      spanning_forest_def previous_nodes_connected_def
     by simp
 qed
 
-theorem kruskal0_refine: "(kruskal0, SPEC (\<lambda>F. is_minimum_spanning_forest F G))\<in>\<langle>Id\<rangle>nres_rel"
+theorem kruskal0_refine: "(kruskal0, SPEC (\<lambda>F. minimum_spanning_forest F G))\<in>\<langle>Id\<rangle>nres_rel"
   unfolding kruskal0_def
   apply(refine_vcg nfoldli_rule[where I="\<lambda>l1 l2 s. loop_invar_kruskal (set l2) s"])
   apply (auto
@@ -381,10 +381,10 @@ proof -
   with \<open>a\<in>V\<close> \<open>b\<in>V\<close>
   have nodes_add_H: "nodes (add_edge a w b H) = nodes H"
     by auto
-  have "(edges_connected (add_edge a w b H) x y) \<longleftrightarrow> (x,y) \<in> per_union uf a b"
+  have "(nodes_connected (add_edge a w b H) x y) \<longleftrightarrow> (x,y) \<in> per_union uf a b"
     if xy: "x\<in>nodes (add_edge a w b H) \<and> y\<in>nodes (add_edge a w b H)" for x y
   proof
-    assume "edges_connected (add_edge a w b H) x y"
+    assume "nodes_connected (add_edge a w b H) x y"
     then obtain p where p: "is_path_undir (add_edge a w b H) x p y"
       by blast
     from \<open>a\<in>V\<close> \<open>b\<in>V\<close> \<open>Domain uf = nodes H\<close> nodes_H
@@ -434,10 +434,10 @@ proof -
     qed
   next
     assume asm: "(x, y) \<in> per_union uf a b"
-    show "edges_connected (add_edge a w b H) x y"
+    show "nodes_connected (add_edge a w b H) x y"
       proof (cases "(x, y) \<in> uf")
         case True
-        with assms(1) xy nodes_add_H have "edges_connected H x y"
+        with assms(1) xy nodes_add_H have "nodes_connected H x y"
           unfolding corresponding_union_find_def
           by auto
         with valid_graph.add_edge_is_path[OF valid_H] show ?thesis
@@ -446,23 +446,23 @@ proof -
         case False
         with asm part_equiv_sym[OF PER]
         have "(x,a) \<in> uf \<and> (b,y) \<in> uf \<or>
-              (b,x) \<in> uf \<and> (y,a) \<in> uf"
+              (x,b) \<in> uf \<and> (a,y) \<in> uf"
           unfolding per_union_def
           by auto
-        with assms(1) \<open>a\<in>V\<close> \<open>b\<in>V\<close> xy nodes_H nodes_add_H obtain p q
+        with assms(1) \<open>a\<in>V\<close> \<open>b\<in>V\<close> xy nodes_H nodes_add_H obtain p q p' q'
           where "is_path_undir H x p a \<and> is_path_undir H b q y \<or>
-                 is_path_undir H b p x \<and> is_path_undir H y q a"
+                 is_path_undir H x p' b \<and> is_path_undir H a q' y"
           unfolding corresponding_union_find_def
-          by force
-        with valid_graph.add_edge_is_path[OF valid_H] obtain p' q'
-          where "is_path_undir (add_edge a w b H) x p' a \<and>
-                is_path_undir (add_edge a w b H) b q' y \<or>
-                is_path_undir (add_edge a w b H) b p' x \<and>
-                is_path_undir (add_edge a w b H) y q' a"
+          by fastforce
+        with valid_graph.add_edge_is_path[OF valid_H]
+        have "is_path_undir (add_edge a w b H) x p a \<and>
+              is_path_undir (add_edge a w b H) b q y \<or>
+              is_path_undir (add_edge a w b H) x p' b \<and>
+              is_path_undir (add_edge a w b H) a q' y"
           by blast
         with valid_graph.is_path_undir_split'[OF add_edge_valid[OF valid_H]]
-        have "is_path_undir (add_edge a w b H) x (p' @ (a, w, b) # q') y \<or>
-              is_path_undir (add_edge a w b H) y (q' @ (a, w, b) # p') x"
+        have "is_path_undir (add_edge a w b H) x (p @ (a, w, b) # q) y \<or>
+              is_path_undir (add_edge a w b H) x (p' @ (b, w, a) # q') y"
           by auto
         with valid_graph.is_path_undir_sym[OF add_edge_valid[OF valid_H]]
         show ?thesis
@@ -475,10 +475,10 @@ qed
 lemma corresponding_union_find_empty:
   shows "corresponding_union_find (per_init V) empty_forest"
 proof -
-  have "(edges_connected empty_forest a b) \<longleftrightarrow> (a,b) \<in> per_init V"
+  have "(nodes_connected empty_forest a b) \<longleftrightarrow> (a,b) \<in> per_init V"
     if ab: "a\<in>V \<and> b\<in>V" for a b
   proof
-    assume "edges_connected empty_forest a b"
+    assume "nodes_connected empty_forest a b"
     then obtain p where p: "is_path_undir empty_forest a p b"
       by blast
     then have "a = b"
@@ -492,7 +492,7 @@ proof -
     from ab have "is_path_undir empty_forest a [] a"
       unfolding empty_forest_def
       by auto
-    with \<open>a=b\<close> show "edges_connected empty_forest a b"
+    with \<open>a=b\<close> show "nodes_connected empty_forest a b"
       by blast
   qed
   then show ?thesis
@@ -533,10 +533,6 @@ lemma l_G_refine: "(l, G) \<in> lst_graph_rel"
 lemma E_impl: "set l = E"
   unfolding graph_of_list_def
   by simp
-
-lemma finite_V: "finite V"
-  unfolding graph_of_list_def
-  by auto
 
 definition kruskal2 :: "('v, 'w) graph nres"
   where "kruskal2 \<equiv> do {
@@ -694,7 +690,7 @@ end
 lemma kruskal_correct_forest:
   fixes l
   defines "G \<equiv> graph_of_list l"
-  shows "<emp> kruskal l <\<lambda>r. \<up>(lst_subgraph_invar r \<and> is_minimum_spanning_forest (subgraph_of_lst G r) G)>\<^sub>t"
+  shows "<emp> kruskal l <\<lambda>r. \<up>(lst_subgraph_invar r \<and> minimum_spanning_forest (subgraph_of_lst G r) G)>\<^sub>t"
 proof -
   interpret Kruskal "graph_of_list l"
     apply unfold_locales
@@ -717,7 +713,7 @@ lemma kruskal_correct_tree:
   fixes l
   defines "G \<equiv> graph_of_list l"
   assumes connected_G: "connected_graph G"
-  shows "<emp> kruskal l <\<lambda>r. \<up>(lst_subgraph_invar r \<and> is_minimum_spanning_tree (subgraph_of_lst G r) G)>\<^sub>t"
+  shows "<emp> kruskal l <\<lambda>r. \<up>(lst_subgraph_invar r \<and> minimum_spanning_tree (subgraph_of_lst G r) G)>\<^sub>t"
   using kruskal_correct_forest minimum_spanning_forest_impl_tree2[OF _ connected_G]
   apply clarsimp
   apply (rule cons_post_rule)
@@ -728,18 +724,17 @@ section \<open>Kruskal tree\<close>
 
 definition kruskal_tree_spec :: "('v, 'w::weight) graph \<Rightarrow> ('v, 'w) graph option nres"
   where "kruskal_tree_spec G \<equiv> do {
-    ASSERT (valid_graph G \<and> finite (nodes G) \<and> finite (edges G));
-    SPEC (\<lambda>F.
+    ASSERT (finite_graph G);
+    SPEC (\<lambda>T'.
       if connected_graph G
-      then \<exists>F'. F = Some F' \<and> is_minimum_spanning_tree F' G
-      else F = None)
+      then \<exists>T. T' = Some T \<and> minimum_spanning_tree T G
+      else T' = None)
     }"
 
 definition kruskal_tree1 :: "('v, 'w::weight) graph \<Rightarrow> ('v, 'w) graph option nres"
   where "kruskal_tree1 G \<equiv> do {
-    ASSERT (valid_graph G \<and> finite (nodes G) \<and> finite (edges G));
-    spanning_forest \<leftarrow> SPEC (\<lambda>F. is_minimum_spanning_forest F G);
-    ASSERT (forest spanning_forest \<and> finite (nodes spanning_forest));
+    spanning_forest \<leftarrow> SPEC (\<lambda>F. minimum_spanning_forest F G);
+    ASSERT (finite_graph spanning_forest);
     connected \<leftarrow> SPEC (\<lambda>conn. conn = connected_graph spanning_forest);
     if connected
     then RETURN (Some spanning_forest)
@@ -750,20 +745,23 @@ theorem kruskal_tree1_refine:
   "(kruskal_tree1 G, kruskal_tree_spec G) \<in> \<langle>Id\<rangle>nres_rel"
   unfolding kruskal_tree1_def kruskal_tree_spec_def
   apply(refine_vcg)
-  apply (auto simp: minimum_spanning_forest_impl_tree)
-  unfolding is_minimum_spanning_forest_def is_spanning_forest_def
+  apply (auto simp: minimum_spanning_forest_impl_tree[OF _ finite_graph.axioms(1)])
   using connected_graph.maximal_connected_impl_connected valid_graph.subgraph_impl_connected
-  by (auto simp: subgraph_def)
+    valid_graph.valid_subgraph
+  unfolding minimum_spanning_forest_def spanning_forest_def finite_graph_def
+    finite_graph_axioms_def subgraph_def
+  apply auto
+  using finite_subset
+  by blast+
 
 definition is_connected_spec :: "('v, 'w) graph \<Rightarrow> bool nres"
   where "is_connected_spec F \<equiv> do {
-    ASSERT (forest F \<and> finite (nodes F) \<and> finite (edges F));
+    ASSERT (forest F \<and> finite_graph F);
     SPEC (\<lambda>conn. conn = connected_graph F)
   }"
 
 definition is_connected :: "('v, 'w) graph \<Rightarrow> bool nres"
   where "is_connected F \<equiv> do {
-    ASSERT (forest F \<and> finite (nodes F) \<and> finite (edges F));
     let N = card (nodes F);
     RETURN (card (edges F) = N - 1)
   }"
@@ -776,9 +774,9 @@ lemma is_connected_refine:
   by auto
 
 definition is_connected_list :: "(nat \<times> int \<times> nat) list \<Rightarrow> (nat \<times> int \<times> nat) list \<Rightarrow> bool"
-  where "is_connected_list l f \<equiv>
+  where "is_connected_list l l_F \<equiv>
     let N = length (remdups ((map fst l) @ (map (snd o snd) l)))
-    in length f = N - 1"
+    in length l_F = N - 1"
 
 definition kruskal_tree2 :: "(nat \<times> int \<times> nat) list \<Rightarrow> (nat \<times> int \<times> nat) list option nres"
   where "kruskal_tree2 l \<equiv> do {
@@ -803,9 +801,11 @@ theorem kruskal_tree2_refine:
   "(kruskal_tree2 l, kruskal_tree1 G) \<in> \<langle>\<langle>lst_subgraph_rel G\<rangle>option_rel\<rangle>nres_rel"
   unfolding kruskal_tree1_def kruskal_tree2_def
   apply (refine_rcg)
+  apply clarsimp_all
   using kruskal5_ref_spec[param_fo, THEN nres_relD]
         is_connected_list_refine[FCOMP is_connected_refine, param_fo, THEN nres_relD]
   unfolding lst_subgraph_rel_def is_connected_spec_def subgraph_of_lst_def
+    minimum_spanning_forest_def spanning_forest_def
   apply (auto simp: in_br_conv)
   by fastforce+
 
@@ -836,7 +836,7 @@ end
 lemma kruskal_tree_correct:
   fixes l
   defines "G \<equiv> graph_of_list l"
-  shows "<emp> kruskal_tree l <\<lambda>r. \<up>(r = None \<and> \<not> connected_graph G \<or> lst_subgraph_invar (the r) \<and> is_minimum_spanning_tree (subgraph_of_lst G (the r)) G)>\<^sub>t"
+  shows "<emp> kruskal_tree l <\<lambda>r. \<up>(r = None \<and> \<not> connected_graph G \<or> connected_graph G \<and> lst_subgraph_invar (the r) \<and> minimum_spanning_tree (subgraph_of_lst G (the r)) G)>\<^sub>t"
 proof -
   interpret Kruskal "graph_of_list l"
     apply unfold_locales
@@ -846,12 +846,8 @@ proof -
   interpret Kruskal_list_nat l
     by unfold_locales
 
-  have "finite V" "finite E"
-    unfolding graph_of_list_def
-    by auto
-
-  then show ?thesis
-    using kruskal_tree_ref_spec[to_hnr]
+  show ?thesis
+    using kruskal_tree_ref_spec[to_hnr] finite_graph_axioms
     unfolding hn_refine_def lst_subgraph_rel_def kruskal_tree_spec_def
     apply (auto simp: valid_graph_axioms)
     apply (erule cons_post_rule)
