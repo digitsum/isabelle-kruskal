@@ -44,12 +44,12 @@ definition edge_weight :: "('v, 'w) graph \<Rightarrow> 'w::weight" where
 definition edges_less_eq :: "('a \<times> 'w::weight \<times> 'a) \<Rightarrow> ('a \<times> 'w \<times> 'a) \<Rightarrow> bool"
   where "edges_less_eq a b \<equiv> fst(snd a) \<le> fst(snd b)"
 
-definition maximal_connected :: "('v, 'w) graph \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool" where
-  "maximal_connected H G \<equiv> \<forall>v\<in>nodes G. \<forall>v'\<in>nodes G.
+definition maximally_connected :: "('v, 'w) graph \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool" where
+  "maximally_connected H G \<equiv> \<forall>v\<in>nodes G. \<forall>v'\<in>nodes G.
     (nodes_connected G v v') \<longrightarrow> (nodes_connected H v v')"
 
 definition spanning_forest :: "('v, 'w) graph \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool" where
-  "spanning_forest F G \<equiv> forest F \<and> maximal_connected F G \<and> subgraph F G"
+  "spanning_forest F G \<equiv> forest F \<and> maximally_connected F G \<and> subgraph F G"
 
 definition optimal_forest :: "('v, 'w::weight) graph \<Rightarrow> ('v, 'w) graph \<Rightarrow> bool" where
   "optimal_forest F G \<equiv> (\<forall>F'::('v, 'w) graph.
@@ -338,10 +338,10 @@ begin
       by blast
   qed
 
-  lemma induce_maximal_connected:
+  lemma induce_maximally_connected:
     assumes "subgraph H G"
     assumes "\<forall>(a,w,b)\<in>E. nodes_connected H a b"
-    shows "maximal_connected H G"
+    shows "maximally_connected H G"
   proof -
     from valid_subgraph[OF \<open>subgraph H G\<close>]
     have valid_H: "valid_graph H" .
@@ -372,37 +372,37 @@ begin
       qed
     qed
     with assms show ?thesis
-      unfolding maximal_connected_def
+      unfolding maximally_connected_def
       by auto
   qed
 
-  lemma add_edge_maximal_connected:
-    assumes "maximal_connected H G"
+  lemma add_edge_maximally_connected:
+    assumes "maximally_connected H G"
     assumes "subgraph H G"
     assumes "(a, w, b) \<in> E"
-    shows "maximal_connected (add_edge a w b H) G"
+    shows "maximally_connected (add_edge a w b H) G"
   proof -
     have "(nodes_connected G v v') \<longrightarrow> (nodes_connected (add_edge a w b H) v v')" (is "?lhs \<longrightarrow> ?rhs")
       if vv': "v \<in> V" "v' \<in> V" for v v'
     proof
       assume ?lhs
-      with \<open>maximal_connected H G\<close> vv' obtain p where "is_path_undir H v p v'"
-        unfolding maximal_connected_def
+      with \<open>maximally_connected H G\<close> vv' obtain p where "is_path_undir H v p v'"
+        unfolding maximally_connected_def
         by auto
       with valid_graph.add_edge_is_path[OF valid_subgraph[OF \<open>subgraph H G\<close>] this]
       show ?rhs
         by auto
     qed
     then show ?thesis
-      unfolding maximal_connected_def
+      unfolding maximally_connected_def
       by auto
   qed
 
-  lemma delete_edge_maximal_connected:
-    assumes "maximal_connected H G"
+  lemma delete_edge_maximally_connected:
+    assumes "maximally_connected H G"
     assumes "subgraph H G"
     assumes pab: "is_path_undir (delete_edge a w b H) a pab b"
-    shows "maximal_connected (delete_edge a w b H) G"
+    shows "maximally_connected (delete_edge a w b H) G"
   proof -
     from valid_subgraph[OF \<open>subgraph H G\<close>]
     have valid_H: "valid_graph H" .
@@ -410,8 +410,8 @@ begin
       if vv': "v \<in> V" "v' \<in> V" for v v'
     proof
       assume ?lhs
-      with \<open>maximal_connected H G\<close> vv' obtain p where p: "is_path_undir H v p v'"
-        unfolding maximal_connected_def
+      with \<open>maximally_connected H G\<close> vv' obtain p where p: "is_path_undir H v p v'"
+        unfolding maximally_connected_def
         by auto
       show ?rhs
       proof (cases "(a, w, b) \<in> set p \<or> (b, w, a) \<in> set p")
@@ -442,16 +442,16 @@ begin
       qed
     qed
     then show ?thesis
-      unfolding maximal_connected_def
+      unfolding maximally_connected_def
       by auto
   qed
 
-  lemma connected_impl_maximal_connected:
+  lemma connected_impl_maximally_connected:
     assumes "connected_graph H"
     assumes subgraph: "subgraph H G"
-    shows "maximal_connected H G"
+    shows "maximally_connected H G"
     using assms
-    unfolding connected_graph_def connected_graph_axioms_def maximal_connected_def
+    unfolding connected_graph_def connected_graph_axioms_def maximally_connected_def
       subgraph_def
     by blast
 
@@ -519,7 +519,7 @@ begin
     assumes subgraph: "subgraph H G"
     shows "connected_graph G"
     using assms is_path_undir_subgraph[OF _ subgraph] valid_graph_axioms
-    unfolding connected_graph_def connected_graph_axioms_def maximal_connected_def
+    unfolding connected_graph_def connected_graph_axioms_def maximally_connected_def
       subgraph_def
     by blast
 
@@ -572,12 +572,12 @@ end
 
 context connected_graph
 begin
-  lemma maximal_connected_impl_connected:
-    assumes "maximal_connected H G"
+  lemma maximally_connected_impl_connected:
+    assumes "maximally_connected H G"
     assumes subgraph: "subgraph H G"
     shows "connected_graph H"
     using assms connected_graph_axioms valid_subgraph[OF subgraph]
-    unfolding connected_graph_def connected_graph_axioms_def maximal_connected_def
+    unfolding connected_graph_def connected_graph_axioms_def maximally_connected_def
       subgraph_def
     by auto
 end
@@ -1424,9 +1424,9 @@ begin
       "(\<forall>(a, w, b)\<in>edges G. nodes_connected F a b)"
       unfolding finite_graph_def finite_graph_axioms_def valid_graph_def
       by blast
-    from F(2,3) forest.axioms(1)[OF F(1)] induce_maximal_connected[of F]
-    have "maximal_connected F G"
-      unfolding maximal_connected_def
+    from F(2,3) forest.axioms(1)[OF F(1)] induce_maximally_connected[of F]
+    have "maximally_connected F G"
+      unfolding maximally_connected_def
       by simp
     with F(1,2) show ?thesis
       unfolding spanning_forest_def
@@ -1488,7 +1488,7 @@ begin
           by blast
         with \<open>\<forall>(a, w, b)\<in>E. nodes_connected H a b\<close>
         obtain p where p:"is_path_undir H a p b"
-          unfolding maximal_connected_def
+          unfolding maximally_connected_def
           by blast
         from valid_graph.is_path_undir_subgraph[OF delete_edge_valid[OF valid_T] p subgraph']
         have "is_path_undir (delete_edge a w b T) a p b" .
@@ -1506,7 +1506,7 @@ lemma minimum_spanning_forest_impl_tree:
   assumes valid_G: "valid_graph G"
   assumes "connected_graph F"
   shows "minimum_spanning_tree F G"
-  using assms valid_graph.connected_impl_maximal_connected[OF valid_G]
+  using assms valid_graph.connected_impl_maximally_connected[OF valid_G]
   unfolding minimum_spanning_forest_def minimum_spanning_tree_def
     spanning_forest_def spanning_tree_def tree_def
     optimal_forest_def optimal_tree_def
@@ -1516,7 +1516,7 @@ lemma minimum_spanning_forest_impl_tree2:
   assumes "minimum_spanning_forest F G"
   assumes connected_G: "connected_graph G"
   shows "minimum_spanning_tree F G"
-  using assms connected_graph.maximal_connected_impl_connected[OF connected_G]
+  using assms connected_graph.maximally_connected_impl_connected[OF connected_G]
     minimum_spanning_forest_impl_tree connected_graph.axioms(1)[OF connected_G]
   unfolding minimum_spanning_forest_def spanning_forest_def
   by auto

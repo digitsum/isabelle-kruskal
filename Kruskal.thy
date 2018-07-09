@@ -181,7 +181,7 @@ proof -
   from \<open>exists_min_spanning_forest H\<close> obtain F where subgraph_H_F: "subgraph H F"
       and msf_F: "minimum_spanning_forest F G"
       and valid_F: "valid_graph F" and forest_F: "forest F"
-      and maximal_connected_F: "maximal_connected F G"
+      and maximally_connected_F: "maximally_connected F G"
       and subgraph_F: "subgraph F G"
     unfolding exists_min_spanning_forest_def minimum_spanning_forest_def
       spanning_forest_def forest_def
@@ -206,9 +206,9 @@ proof -
       by auto
   next
     case False
-    from maximal_connected_F \<open>(a,w,b)\<in>E\<close> is_path_undir_simps(2)[of a w b]
+    from maximally_connected_F \<open>(a,w,b)\<in>E\<close> is_path_undir_simps(2)[of a w b]
     have  "nodes_connected F a b"
-      unfolding maximal_connected_def
+      unfolding maximally_connected_def
       by (meson E_validD)
     from forest.delete_edge_from_path[OF forest_F this subgraph_H_F \<open>\<not> nodes_connected H a b\<close>]
     obtain x w' y where xy: "(x, w', y) \<in> edges F" "(x, w', y) \<notin> edges H" and
@@ -269,10 +269,10 @@ proof -
       have "forest F'"
         by simp
     moreover from connected_xy F' swap_delete_add_edge[OF ab_neq_xy, of F]
-      delete_edge_maximal_connected[OF
-        add_edge_maximal_connected[OF maximal_connected_F subgraph_F \<open>(a,w,b)\<in>E\<close>]
+      delete_edge_maximally_connected[OF
+        add_edge_maximally_connected[OF maximally_connected_F subgraph_F \<open>(a,w,b)\<in>E\<close>]
         add_edge_preserve_subgraph[OF subgraph_F \<open>(a,w,b)\<in>E\<close>]]
-      have "maximal_connected F' G"
+      have "maximally_connected F' G"
       unfolding subgraph_def by metis
     moreover from improvement msf_F have "optimal_forest F' G"
       unfolding minimum_spanning_forest_def optimal_forest_def
@@ -746,7 +746,7 @@ theorem kruskal_tree1_refine:
   unfolding kruskal_tree1_def kruskal_tree_spec_def
   apply(refine_vcg)
   apply (auto simp: minimum_spanning_forest_impl_tree[OF _ finite_graph.axioms(1)])
-  using connected_graph.maximal_connected_impl_connected valid_graph.subgraph_impl_connected
+  using connected_graph.maximally_connected_impl_connected valid_graph.subgraph_impl_connected
     valid_graph.valid_subgraph
   unfolding minimum_spanning_forest_def spanning_forest_def finite_graph_def
     finite_graph_axioms_def subgraph_def

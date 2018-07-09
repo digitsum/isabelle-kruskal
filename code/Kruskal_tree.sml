@@ -471,11 +471,11 @@ fun minus_nat m n =
   Nat (max ord_integer (0 : IntInf.int)
         (IntInf.- (integer_of_nat m, integer_of_nat n)));
 
-fun is_connected_list l f =
+fun is_connected_list l l_F =
   let
     val n = size_list (remdups equal_nat (map fst l @ map (snd o snd) l));
   in
-    equal_nata (size_list f) (minus_nat n one_nata)
+    equal_nata (size_list l_F) (minus_nat n one_nata)
   end;
 
 fun kruskal_tree x =
